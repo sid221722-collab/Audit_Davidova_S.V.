@@ -4,7 +4,7 @@
   <base target="_top">
 
   <meta name="viewport"
-        content="width=900, initial-scale=0.5, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+        content="width=900, initial-scale=0.5, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
   <script>
     (function () {
       try {
@@ -17,7 +17,7 @@
         var scale = Math.min(1, Math.max(0.1, screenWidth / 900));
         viewport.setAttribute(
           'content',
-          'width=900, initial-scale=' + scale.toFixed(4) + ', minimum-scale=' + scale.toFixed(4) + ', maximum-scale=5.0, user-scalable=yes, viewport-fit=cover'
+          'width=900, initial-scale=' + scale.toFixed(4) + ', minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover'
         );
       } catch (e) {
         console.warn('Не удалось настроить масштаб по ширине экрана:', e);
@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#1769e0">
 
   <title>Аудит</title>
-  <meta name="pwa-version" content="v44">
+  <meta name="pwa-version" content="v45">
 
   <style>
 :root{--bg:#f3f5f7;--card:#fff;--text:#202124;--muted:#687078;--line:#c7cdd4;--blue:#1769e0;--green:#188038;--red:#c5221f;--orange:#b06000;--radius:12px}
