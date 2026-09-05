@@ -4,7 +4,7 @@
   <base target="_top">
 
   <meta name="viewport"
-        content="width=900, initial-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+        content="width=900, initial-scale=0.5, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 
   <script src="./app-config.js"></script>
   <link rel="manifest" href="./manifest.webmanifest">
@@ -4067,54 +4067,109 @@ if ('serviceWorker' in navigator) {
 </script>
 
 
-<script id="ios-input-zoom-guard-v41">
+<script id="ios-input-zoom-guard-v42">
 (function () {
   var viewport = document.querySelector('meta[name="viewport"]');
   if (!viewport) return;
 
-  var normalViewport = 'width=900, initial-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover';
-  var inputViewport = 'width=900, initial-scale=0.5, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+  var NORMAL = 'width=900, initial-scale=0.5, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover';
+  var INPUT_GUARD = 'width=900, initial-scale=0.5, minimum-scale=0.5, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+  var guardUntil = 0;
+  var lastReset = 0;
   var restoreTimer = null;
 
-  function setInputMode() {
-    if (restoreTimer) clearTimeout(restoreTimer);
-    viewport.setAttribute('content', inputViewport);
+  function setViewport(content) {
+    viewport.setAttribute('content', content);
   }
 
-  function restoreNormalMode() {
+  function forceBaseScale() {
+    var now = Date.now();
+    if (now - lastReset < 180) return;
+    lastReset = now;
+    if (restoreTimer) clearTimeout(restoreTimer);
+
+    // Коротко фиксируем масштаб 1.0, затем возвращаем штатный масштаб 0.5.
+    // Это сбрасывает автоматический zoom Safari/Chrome после фокуса на поле.
+    setViewport('width=900, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        setViewport(NORMAL);
+      });
+    });
+  }
+
+  function startGuard(ms) {
+    guardUntil = Date.now() + (ms || 1400);
+    setViewport(INPUT_GUARD);
     if (restoreTimer) clearTimeout(restoreTimer);
     restoreTimer = setTimeout(function () {
-      viewport.setAttribute('content', normalViewport);
-    }, 80);
+      setViewport(NORMAL);
+      // Если браузер всё же успел приблизить страницу — вернуть базовый масштаб.
+      if (window.visualViewport && window.visualViewport.scale > 0.58) {
+        forceBaseScale();
+      }
+    }, 160);
+  }
+
+  function endGuard() {
+    guardUntil = Date.now() + 450;
+    setViewport(NORMAL);
+    setTimeout(function () {
+      if (window.visualViewport && window.visualViewport.scale > 0.58) {
+        forceBaseScale();
+      }
+    }, 140);
   }
 
   document.addEventListener('touchstart', function (e) {
     var el = e.target;
     if (el && el.matches && el.matches('input, textarea, select')) {
-      setInputMode();
+      startGuard();
     }
   }, true);
 
   document.addEventListener('pointerdown', function (e) {
     var el = e.target;
     if (el && el.matches && el.matches('input, textarea, select')) {
-      setInputMode();
+      startGuard();
     }
   }, true);
 
   document.addEventListener('focusin', function (e) {
     var el = e.target;
     if (el && el.matches && el.matches('input, textarea, select')) {
-      setInputMode();
+      startGuard(1600);
     }
   }, true);
 
   document.addEventListener('focusout', function (e) {
     var el = e.target;
     if (el && el.matches && el.matches('input, textarea, select')) {
-      restoreNormalMode();
+      endGuard();
     }
   }, true);
+
+  // Поворот/раскрытие раздела/другие клики не должны оставлять случайный zoom.
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    if (!el || !el.closest) return;
+    if (el.closest('.section-skip-button, .draft-button')) {
+      guardUntil = Date.now() + 900;
+      setTimeout(function () {
+        if (window.visualViewport && window.visualViewport.scale > 0.58) {
+          forceBaseScale();
+        }
+      }, 180);
+    }
+  }, true);
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', function () {
+      if (Date.now() <= guardUntil && window.visualViewport.scale > 0.58) {
+        forceBaseScale();
+      }
+    }, {passive:true});
+  }
 })();
 </script>
 
