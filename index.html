@@ -1,10 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-  
+  <base target="_top">
 
   <meta name="viewport"
         content="width=device-width, initial-scale=1.0">
+
+  <script src="./app-config.js"></script>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#1769e0">
 
   <title>Аудит</title>
 
@@ -714,8 +718,41 @@ button.photo-delete,
 }
 </style>
 
-<script src="./app-config.js"></script>
-<link rel="manifest" href="./manifest.webmanifest"><meta name="theme-color" content="#1769e0"></head>
+<style id="photo-grid-final-v35">
+/* Не более четырёх фотографий в одном ряду. При добавлении пятой
+   следующая строка создаётся автоматически, а блок растёт вниз. */
+.photo-list {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+.photo-list .photo-item {
+  flex: 0 0 86px !important;
+  width: 86px !important;
+  min-width: 86px !important;
+  max-width: 86px !important;
+  box-sizing: border-box !important;
+}
+.question .photos-area {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}
+@media (max-width: 720px) {
+  .question .photos-area {
+    min-height: 0 !important;
+    height: auto !important;
+  }
+}
+</style>
+
+</head>
 
 
 <body>
@@ -1322,7 +1359,7 @@ function fileToBase64ForDraft(file) {
 
 function uploadDraftPhoto(question, file) {
   // Фотография сохраняется локально вместе с черновиком.
-  // На сервер она попадёт только при нажатии «Отправить проверку».
+  // На сервер она попадёт только при нажатии «Выгрузить отчёт».
   scheduleLocalDraftSave();
 }
 
@@ -1978,69 +2015,113 @@ loadApp();
    ========================================================== */
 
 function loadApp() {
-  // Автономный режим PWA: сначала поднимаем сохранённую структуру формы.
+
+  // PWA: при повторном запуске офлайн сначала пробуем локальный снимок
+  // структуры формы, сохранённый после первого успешного онлайн-запуска.
   let cachedAppData = null;
   try {
     const raw = localStorage.getItem('audit_app_data_v1');
     if (raw) cachedAppData = JSON.parse(raw);
   } catch (e) {}
 
+  // Обычный запуск внутри Google Apps Script — исходная логика.
+  if (
+    typeof google !== 'undefined' &&
+    google.script &&
+    google.script.run
+  ) {
+    google.script.run
+      .withSuccessHandler(function(data) {
+        renderApp(data);
+        loadLocalDraft().then(function(localResult) {
+          if (localResult && localResult.exists) {
+            setTimeout(function() { applyLocalDraft(localResult.draft); }, 50);
+          }
+          refreshDraftButtonState();
+        }).catch(function() { refreshDraftButtonState(); });
+      })
+      .withFailureHandler(function(error) {
+        if (cachedAppData && cachedAppData.sections) {
+          renderApp(cachedAppData);
+          loadLocalDraft().then(function(localResult) {
+            if (localResult && localResult.exists) {
+              setTimeout(function() { applyLocalDraft(localResult.draft); }, 50);
+            }
+            refreshDraftButtonState();
+          }).catch(function() { refreshDraftButtonState(); });
+        } else {
+          showFatalError(getErrorMessage(error) + '\n\nНет локальной копии формы для автономной работы.');
+        }
+      })
+      .getAppData();
+    return;
+  }
+
+  // PWA-режим.
   if (cachedAppData && cachedAppData.sections) {
     renderApp(cachedAppData);
     setTimeout(function() {
       loadLocalDraft().then(function(localResult) {
         if (localResult && localResult.exists) applyLocalDraft(localResult.draft);
         refreshDraftButtonState();
-      });
+      }).catch(function() { refreshDraftButtonState(); });
     }, 30);
-  }
-
-  // В обычном Apps Script окне структура формы приходит напрямую.
-  if (typeof google !== 'undefined' && google.script && google.script.run) {
-    google.script.run
-      .withSuccessHandler(function(data) {
-        renderApp(data);
-        loadLocalDraft().then(function(localResult) {
-          if (localResult && localResult.exists) setTimeout(function(){ applyLocalDraft(localResult.draft); }, 30);
-          refreshDraftButtonState();
-        });
-      })
-      .withFailureHandler(function() {
-        if (!cachedAppData) showFatalError('Не удалось загрузить форму. Откройте приложение один раз при наличии интернета.');
-      })
-      .getAppData();
     return;
   }
 
-  // В PWA первый запуск при наличии сети получает APP_DATA через JSONP.
-  const url = ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || 'https://script.google.com/macros/s/AKfycbxjzCa3WCCoazrF3rRK3SzrOZWFBOaogz5hgm8sY_GtriJxOE-U1HWlMsGzbc5Do5JoTA/exec').trim();
-  if (url && !cachedAppData) {
-    loadAppDataJsonp(url).then(function(data) {
+  // Первый запуск PWA требует интернет для получения актуальной структуры формы.
+  const url = ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || '').trim();
+  if (!url) {
+    showFatalError('Не задан URL Google Apps Script. Откройте приложение один раз при наличии интернета.');
+    return;
+  }
+
+  loadAppDataJsonp(url)
+    .then(function(data) {
       renderApp(data);
       return loadLocalDraft();
-    }).then(function(localResult) {
+    })
+    .then(function(localResult) {
       if (localResult && localResult.exists) applyLocalDraft(localResult.draft);
       refreshDraftButtonState();
-    }).catch(function(err) {
-      showFatalError('Форма ещё не была загружена для автономной работы. Откройте приложение один раз при наличии интернета.\n\n' + getErrorMessage(err));
+    })
+    .catch(function(err) {
+      showFatalError('Не удалось загрузить форму для первого запуска. Проверьте подключение к интернету.\n\n' + getErrorMessage(err));
     });
-  } else if (!cachedAppData) {
-    showFatalError('Откройте приложение один раз при наличии интернета: структура формы будет сохранена на устройстве и после этого приложение сможет запускаться офлайн.');
-  }
 }
 
 function loadAppDataJsonp(url) {
   return new Promise(function(resolve, reject) {
     const cb = '__auditAppData_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const script = document.createElement('script');
-    const timer = setTimeout(function(){ cleanup(); reject(new Error('Тайм-аут загрузки формы.')); }, 15000);
-    function cleanup(){ clearTimeout(timer); try{ delete window[cb]; }catch(e){} if(script.parentNode) script.parentNode.removeChild(script); }
-    window[cb] = function(data){ cleanup(); resolve(data); };
-    script.onerror = function(){ cleanup(); reject(new Error('Не удалось подключиться к серверу формы.')); };
-    script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'action=getAppData&callback=' + encodeURIComponent(cb);
+    const timer = setTimeout(function() {
+      cleanup();
+      reject(new Error('Тайм-аут загрузки формы.'));
+    }, 20000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[cb]; } catch (e) {}
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cb] = function(data) {
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('Не удалось подключиться к серверу формы.'));
+    };
+
+    script.src = url + (url.indexOf('?') >= 0 ? '&' : '?') +
+      'action=getAppData&callback=' + encodeURIComponent(cb);
+
     document.head.appendChild(script);
   });
 }
+
 
 /* ==========================================================
    ОТРИСОВКА
@@ -2049,7 +2130,7 @@ function loadAppDataJsonp(url) {
 function renderApp(data) {
 
   APP_DATA = data;
-  try { localStorage.setItem('audit_app_data_v1', JSON.stringify(data)); } catch (e) { console.warn('Не удалось сохранить форму локально', e); }
+  try { localStorage.setItem('audit_app_data_v1', JSON.stringify(data)); } catch (e) {}
 
   document
     .getElementById(
@@ -2129,7 +2210,7 @@ function renderApp(data) {
       type="button"
       class="submit-button">
 
-      Отправить проверку
+      Выгрузить отчёт
 
     </button>
 
@@ -3609,14 +3690,20 @@ async function submitForm() {
       await collectPayload();
 
     if (typeof google === 'undefined' || !google.script || !google.script.run) {
-      const url = ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || 'https://script.google.com/macros/s/AKfycbxjzCa3WCCoazrF3rRK3SzrOZWFBOaogz5hgm8sY_GtriJxOE-U1HWlMsGzbc5Do5JoTA/exec').trim();
+      const url = ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || '').trim();
+      if (!navigator.onLine) {
+        showLoading(false);
+        button.disabled = false;
+        alert('Нет подключения к интернету. Черновик сохранён на этом устройстве. Подключитесь к интернету и нажмите «Выгрузить отчёт».');
+        return;
+      }
       if (!url) {
         showLoading(false);
         button.disabled = false;
-        alert('Не задан URL Google Apps Script. Подключение к серверу требуется только для «Отправить проверку».');
+        alert('Не задан URL Google Apps Script.');
         return;
       }
-      showLoading(true, 'Отправляем проверку в Google Drive...');
+      showLoading(true, 'Сохраняем проверку и фотографии...');
       submitPayloadViaPost(url, payload);
       return;
     }
@@ -3905,17 +3992,8 @@ function escapeHtml(
 
 </script>
 
-
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){ navigator.serviceWorker.register('./service-worker.js').catch(function(e){ console.warn('Service Worker:', e); }); });
-}
-</script>
-</body>
-</html>
-
 function submitPayloadViaPost(url, payload) {
-  // Обычная HTML POST-навигация не требует CORS и работает с Apps Script.
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = url;
@@ -3929,4 +4007,13 @@ function submitPayloadViaPost(url, payload) {
   form.submit();
 }
 
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./service-worker.js')
+      .catch(function(e) { console.warn('Service Worker:', e); });
+  });
+}
+</script>
 
+</body>
+</html>

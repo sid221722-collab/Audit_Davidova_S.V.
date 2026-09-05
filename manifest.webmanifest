@@ -3,8 +3,7 @@
   "short_name": "Аудит",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#f3f5f7",
   "theme_color": "#1769e0",
-  "lang": "ru",
   "icons": []
 }
