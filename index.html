@@ -752,6 +752,50 @@ button.photo-delete,
 }
 </style>
 
+
+<style id="pwa-mobile-match-appscript-v40">
+/* На телефоне PWA использует те же размеры, что и основная форма Apps Script.
+   Мобильные media-правила исходной формы не должны перестраивать интерфейс. */
+@media (max-width: 720px) {
+  html { font-size: 30px !important; }
+  body { font-size: 30px !important; min-width: 0 !important; }
+  .header { padding: 10px 12px !important; }
+  .header-title { font-size: 20px !important; }
+  .header-info { grid-template-columns: 1fr 150px !important; gap: 8px !important; }
+  .header-info label, .responsible-label, .answer-label, .photos-title, .comment-label { font-size: 13px !important; }
+  .container { max-width: 900px !important; margin: 12px auto !important; padding: 0 10px 90px !important; }
+  .section { margin-bottom: 18px !important; }
+  .section-header { padding: 12px !important; }
+  .section-title { font-size: 35px !important; }
+  .questions { padding: 8px !important; }
+  .question { margin-bottom: 12px !important; }
+  .question-head { display: flex !important; padding: 11px 11px 9px !important; gap: 8px !important; }
+  .question-title { font-size: 16px !important; }
+  .status { min-width: auto !important; min-height: 0 !important; margin-top: 0 !important; display: inline-block !important; font-size: 11px !important; }
+  .answer-area { padding: 13px !important; }
+  .answers { grid-template-columns: 1fr !important; gap: 9px !important; }
+  .answer-button { min-height: 54px !important; padding: 12px 14px !important; font-size: 30px !important; }
+  .comment-area, .photos-area { padding: 10px !important; margin-top: 10px !important; }
+  input[type=text], input[type=date], textarea { min-height: 44px !important; font-size: 30px !important; }
+  .progress-panel { padding: 8px 10px !important; }
+  .progress-line { font-size: 13px !important; }
+  .submit-panel { padding: 8px !important; }
+  .submit-button { min-height: 48px !important; font-size: 16px !important; }
+  .section-header .responsible-input { width: calc(100% - 126px) !important; height: 44px !important; min-height: 44px !important; }
+  .section-header .section-skip-button { width: 116px !important; height: 44px !important; min-height: 44px !important; max-height: 44px !important; margin-left: 5px !important; font-size: 16px !important; }
+  .draft-buttons { flex-direction: column !important; align-items: stretch !important; }
+  .draft-button { width: 150px !important; height: 42px !important; min-height: 42px !important; font-size: 13px !important; padding: 0 7px !important; }
+}
+@media (max-width: 390px) {
+  .header-info { grid-template-columns: 1fr 150px !important; }
+  .question-head { display: flex !important; }
+  .answers { grid-template-columns: 1fr !important; }
+  .answer-button { min-height: 54px !important; }
+  .question-title { font-size: 16px !important; }
+  .draft-button { width: 142px !important; font-size: 12px !important; }
+}
+</style>
+
 </head>
 
 
