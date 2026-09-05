@@ -4,7 +4,7 @@
   <base target="_top">
 
   <meta name="viewport"
-        content="width=900, initial-scale=0.5, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+        content="width=900, initial-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 
   <script src="./app-config.js"></script>
   <link rel="manifest" href="./manifest.webmanifest">
@@ -796,6 +796,13 @@ button.photo-delete,
 }
 </style>
 
+
+<style id="prevent-ios-input-zoom-v41">
+html, body, input, select, textarea {
+  -webkit-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
+}
+</style>
 </head>
 
 
@@ -4057,6 +4064,58 @@ if ('serviceWorker' in navigator) {
       .catch(function(e) { console.warn('Service Worker:', e); });
   });
 }
+</script>
+
+
+<script id="ios-input-zoom-guard-v41">
+(function () {
+  var viewport = document.querySelector('meta[name="viewport"]');
+  if (!viewport) return;
+
+  var normalViewport = 'width=900, initial-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover';
+  var inputViewport = 'width=900, initial-scale=0.5, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+  var restoreTimer = null;
+
+  function setInputMode() {
+    if (restoreTimer) clearTimeout(restoreTimer);
+    viewport.setAttribute('content', inputViewport);
+  }
+
+  function restoreNormalMode() {
+    if (restoreTimer) clearTimeout(restoreTimer);
+    restoreTimer = setTimeout(function () {
+      viewport.setAttribute('content', normalViewport);
+    }, 80);
+  }
+
+  document.addEventListener('touchstart', function (e) {
+    var el = e.target;
+    if (el && el.matches && el.matches('input, textarea, select')) {
+      setInputMode();
+    }
+  }, true);
+
+  document.addEventListener('pointerdown', function (e) {
+    var el = e.target;
+    if (el && el.matches && el.matches('input, textarea, select')) {
+      setInputMode();
+    }
+  }, true);
+
+  document.addEventListener('focusin', function (e) {
+    var el = e.target;
+    if (el && el.matches && el.matches('input, textarea, select')) {
+      setInputMode();
+    }
+  }, true);
+
+  document.addEventListener('focusout', function (e) {
+    var el = e.target;
+    if (el && el.matches && el.matches('input, textarea, select')) {
+      restoreNormalMode();
+    }
+  }, true);
+})();
 </script>
 
 </body>
