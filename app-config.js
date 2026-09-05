@@ -1,3 +1,3 @@
 window.AUDIT_PWA_CONFIG = {
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyq7-oczRRvo7jylD_kFnjPVv1DIChANXdEmV-qWm7MDgx9vFkbz3gG5qDI5ltROHGjUA/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzbo9mCuj6B6RyJ8edi-4A_P6MkPPbvPjQll1k9AENfN-CfYERlF2FVcWd8__q7d2tv-w/exec'
 };

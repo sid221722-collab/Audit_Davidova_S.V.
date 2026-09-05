@@ -2013,7 +2013,7 @@ function loadApp() {
   }
 
   // В PWA первый запуск при наличии сети получает APP_DATA через JSONP.
-  const url = (window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL || '').trim();
+  const url = ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || 'https://script.google.com/macros/s/AKfycbzbo9mCuj6B6RyJ8edi-4A_P6MkPPbvPjQll1k9AENfN-CfYERlF2FVcWd8__q7d2tv-w/exec').trim();
   if (url && !cachedAppData) {
     loadAppDataJsonp(url).then(function(data) {
       renderApp(data);
@@ -3609,7 +3609,7 @@ async function submitForm() {
       await collectPayload();
 
     if (typeof google === 'undefined' || !google.script || !google.script.run) {
-      const url = (window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL || '').trim();
+      const url = ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || 'https://script.google.com/macros/s/AKfycbzbo9mCuj6B6RyJ8edi-4A_P6MkPPbvPjQll1k9AENfN-CfYERlF2FVcWd8__q7d2tv-w/exec').trim();
       if (!url) {
         showLoading(false);
         button.disabled = false;
