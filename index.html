@@ -994,6 +994,121 @@ const LOCAL_DRAFT_CACHE_URL = '/__audit_local_draft_v3__';
 const LOCAL_PHOTO_CACHE = 'audit_local_photos_cache_v5';
 const LOCAL_DRAFT_ARCHIVE_VERSION = 'v1';
 const LOCAL_DRAFT_COOKIE_KEY = 'audit_local_draft_marker_v4';
+
+const LOCAL_PHOTO_INDEX_KEY = 'audit_local_photo_index_v1';
+const LOCAL_PHOTO_DATA_PREFIX = 'audit_local_photo_data_';
+
+/* ==========================================================
+   НАДЁЖНЫЙ ИНДЕКС ЛОКАЛЬНЫХ ФОТО
+   ========================================================== */
+function readLocalPhotoIndex() {
+  try {
+    const raw = localStorage.getItem(LOCAL_PHOTO_INDEX_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeLocalPhotoIndex(index) {
+  try {
+    localStorage.setItem(LOCAL_PHOTO_INDEX_KEY, JSON.stringify(index || {}));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function questionPhotoIndexKey(question) {
+  return String(question?.dataset?.questionId || '');
+}
+
+function rememberLocalPhotoMeta(question, file) {
+  if (!question || !file || !file._localPhotoId) return;
+  try {
+    const index = readLocalPhotoIndex();
+    const qid = questionPhotoIndexKey(question);
+    if (!qid) return;
+    if (!Array.isArray(index[qid])) index[qid] = [];
+    const meta = {
+      photoId: file._localPhotoId,
+      name: file._localPhotoName || file.name || 'photo.jpg',
+      mimeType: file._mimeType || file.type || 'image/jpeg'
+    };
+    const pos = index[qid].findIndex(function(item) { return item && item.photoId === meta.photoId; });
+    if (pos >= 0) index[qid][pos] = meta;
+    else index[qid].push(meta);
+    writeLocalPhotoIndex(index);
+  } catch (e) {
+    console.warn('Не удалось сохранить индекс локальной фотографии:', e);
+  }
+}
+
+function forgetLocalPhotoMeta(file) {
+  if (!file || !file._localPhotoId) return;
+  try {
+    const index = readLocalPhotoIndex();
+    Object.keys(index).forEach(function(qid) {
+      index[qid] = (index[qid] || []).filter(function(item) {
+        return !item || item.photoId !== file._localPhotoId;
+      });
+      if (!index[qid].length) delete index[qid];
+    });
+    writeLocalPhotoIndex(index);
+    try { localStorage.removeItem(LOCAL_PHOTO_DATA_PREFIX + file._localPhotoId); } catch (e) {}
+  } catch (e) {}
+}
+
+function saveLocalPhotoToStorage(record) {
+  if (!record || !record.photoId || !record.dataUrl) return false;
+  try {
+    localStorage.setItem(LOCAL_PHOTO_DATA_PREFIX + record.photoId, JSON.stringify(record));
+    return true;
+  } catch (e) {
+    // Большие фотографии могут не помещаться в localStorage — IndexedDB/Cache
+    // являются основными хранилищами, поэтому ошибка здесь не критична.
+    return false;
+  }
+}
+
+function loadLocalPhotoFromStorage(photoId) {
+  if (!photoId) return Promise.resolve(null);
+  try {
+    const raw = localStorage.getItem(LOCAL_PHOTO_DATA_PREFIX + photoId);
+    if (!raw) return Promise.resolve(null);
+    const parsed = JSON.parse(raw);
+    return Promise.resolve(parsed && parsed.dataUrl ? parsed : null);
+  } catch (e) {
+    return Promise.resolve(null);
+  }
+}
+
+function mergeLocalPhotoIndexIntoDraft(draft) {
+  if (!draft || !Array.isArray(draft.sections)) return draft;
+  const index = readLocalPhotoIndex();
+  const copy = JSON.parse(JSON.stringify(draft));
+  copy.sections.forEach(function(section) {
+    (section.questions || []).forEach(function(question) {
+      const indexed = index[String(question.id || '')] || [];
+      const existing = Array.isArray(question.photos) ? question.photos : [];
+      const seen = {};
+      const merged = [];
+      existing.concat(indexed).forEach(function(photo) {
+        if (!photo || !photo.photoId || seen[photo.photoId]) return;
+        seen[photo.photoId] = true;
+        merged.push({
+          photoId: photo.photoId,
+          name: photo.name || 'photo.jpg',
+          mimeType: photo.mimeType || 'image/jpeg'
+        });
+      });
+      question.photos = merged;
+    });
+  });
+  return copy;
+}
+
 const SERVER_DRAFT_VERSION = '1.0';
 let localDraftSaveTimer = null;
 let draftSaveTimer = null;
@@ -1108,149 +1223,6 @@ function makeDraftPhotoName(question, photoIndex, file) {
     nums.sectionNumber + '_' +
     nums.pointNumber + '_' +
     (photoIndex + 1) + ext;
-}
-
-
-/* ==========================================================
-   ЛОКАЛЬНЫЙ ИНДЕКС ФОТОГРАФИЙ
-   ========================================================== */
-
-const LOCAL_PHOTO_INDEX_KEY = 'audit_local_photo_index_v1';
-const LOCAL_PHOTO_DATA_PREFIX = 'audit_local_photo_data_';
-
-function readLocalPhotoIndex() {
-  try {
-    const raw = localStorage.getItem(LOCAL_PHOTO_INDEX_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function writeLocalPhotoIndex(index) {
-  try {
-    localStorage.setItem(LOCAL_PHOTO_INDEX_KEY, JSON.stringify(index || {}));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function getQuestionLocalPhotoKey(question) {
-  return String(question?.dataset?.questionId || '');
-}
-
-function rememberLocalPhotoMeta(question, file) {
-  if (!question || !file) return;
-  if (!file._localPhotoId) return;
-
-  const qid = getQuestionLocalPhotoKey(question);
-  if (!qid) return;
-
-  const index = readLocalPhotoIndex();
-  if (!Array.isArray(index[qid])) index[qid] = [];
-
-  const meta = {
-    photoId: file._localPhotoId,
-    name: file._localPhotoName || file.name || 'photo.jpg',
-    mimeType: file._mimeType || file.type || 'image/jpeg'
-  };
-
-  const existing = index[qid].findIndex(function(item) {
-    return item && item.photoId === meta.photoId;
-  });
-
-  if (existing >= 0) {
-    index[qid][existing] = meta;
-  } else {
-    index[qid].push(meta);
-  }
-
-  writeLocalPhotoIndex(index);
-}
-
-function forgetLocalPhotoMeta(file) {
-  if (!file || !file._localPhotoId) return;
-  const photoId = file._localPhotoId;
-  const index = readLocalPhotoIndex();
-
-  Object.keys(index).forEach(function(qid) {
-    index[qid] = (index[qid] || []).filter(function(item) {
-      return !item || item.photoId !== photoId;
-    });
-    if (!index[qid].length) delete index[qid];
-  });
-
-  writeLocalPhotoIndex(index);
-
-  try {
-    localStorage.removeItem(LOCAL_PHOTO_DATA_PREFIX + photoId);
-  } catch (e) {}
-}
-
-function saveLocalPhotoToStorage(record) {
-  if (!record || !record.photoId || !record.dataUrl) return false;
-  try {
-    // Дополнительная резервная копия. Основное хранилище — IndexedDB.
-    localStorage.setItem(
-      LOCAL_PHOTO_DATA_PREFIX + record.photoId,
-      JSON.stringify({
-        photoId: record.photoId,
-        name: record.name || 'photo.jpg',
-        mimeType: record.mimeType || 'image/jpeg',
-        dataUrl: record.dataUrl
-      })
-    );
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function loadLocalPhotoFromStorage(photoId) {
-  if (!photoId) return Promise.resolve(null);
-  try {
-    const raw = localStorage.getItem(LOCAL_PHOTO_DATA_PREFIX + photoId);
-    if (!raw) return Promise.resolve(null);
-    const parsed = JSON.parse(raw);
-    return Promise.resolve(parsed && parsed.dataUrl ? parsed : null);
-  } catch (e) {
-    return Promise.resolve(null);
-  }
-}
-
-function mergeLocalPhotoIndexIntoDraft(draft) {
-  if (!draft || !Array.isArray(draft.sections)) return draft;
-
-  const index = readLocalPhotoIndex();
-
-  draft.sections.forEach(function(section) {
-    (section.questions || []).forEach(function(question) {
-      const indexed = index[String(question.id || '')] || [];
-      const existing = Array.isArray(question.photos) ? question.photos : [];
-
-      const seen = {};
-      existing.forEach(function(item) {
-        if (item && item.photoId) seen[item.photoId] = true;
-      });
-
-      indexed.forEach(function(item) {
-        if (item && item.photoId && !seen[item.photoId]) {
-          existing.push({
-            photoId: item.photoId,
-            name: item.name || 'photo.jpg',
-            mimeType: item.mimeType || 'image/jpeg'
-          });
-          seen[item.photoId] = true;
-        }
-      });
-
-      question.photos = existing;
-    });
-  });
-
-  return draft;
 }
 
 function buildDraftPayload() {
