@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#1769e0">
 
   <title>Аудит</title>
-  <meta name="pwa-version" content="v46">
+  <meta name="pwa-version" content="v61">
 
   <style>
 :root{--bg:#f3f5f7;--card:#fff;--text:#202124;--muted:#687078;--line:#c7cdd4;--blue:#1769e0;--green:#188038;--red:#c5221f;--orange:#b06000;--radius:12px}
@@ -823,9 +823,8 @@ html, body, input, select, textarea {
   text-size-adjust: 100% !important;
 }
 </style>
-
-<style id="v54-submit-button-style">
-  .submit-button { font-size: 35px !important; text-transform: uppercase !important; }
+<style id="v46-button-and-draft-fix">
+.submit-button { font-size: 35px !important; }
 </style>
 </head>
 
@@ -986,136 +985,19 @@ const LOCAL_DRAFT_DB = 'audit_local_draft_v1';
 const LOCAL_DRAFT_STORE = 'draft';
 const LOCAL_PHOTO_STORE = 'photos';
 const LOCAL_DRAFT_META_KEY = 'audit_local_draft_meta_v1';
-const LOCAL_DRAFT_FULL_KEY = 'audit_local_draft_full_v3';
-const LOCAL_DRAFT_CHUNK_PREFIX = 'audit_local_draft_chunk_v4_';
-const LOCAL_DRAFT_CHUNK_COUNT_KEY = 'audit_local_draft_chunk_count_v4';
-const LOCAL_DRAFT_CACHE = 'audit_local_draft_cache_v4';
+const LOCAL_DRAFT_FULL_KEY = 'audit_local_draft_full_v2';
+const LOCAL_DRAFT_CHUNK_PREFIX = 'audit_local_draft_chunk_v3_';
+const LOCAL_DRAFT_CHUNK_COUNT_KEY = 'audit_local_draft_chunk_count_v3';
+const LOCAL_DRAFT_CACHE = 'audit_local_draft_cache_v3';
 const LOCAL_DRAFT_CACHE_URL = '/__audit_local_draft_v3__';
-const LOCAL_PHOTO_CACHE = 'audit_local_photos_cache_v5';
-const LOCAL_DRAFT_ARCHIVE_VERSION = 'v1';
-const LOCAL_DRAFT_COOKIE_KEY = 'audit_local_draft_marker_v4';
-
-const LOCAL_PHOTO_INDEX_KEY = 'audit_local_photo_index_v1';
-const LOCAL_PHOTO_DATA_PREFIX = 'audit_local_photo_data_';
-
-/* ==========================================================
-   НАДЁЖНЫЙ ИНДЕКС ЛОКАЛЬНЫХ ФОТО
-   ========================================================== */
-function readLocalPhotoIndex() {
-  try {
-    const raw = localStorage.getItem(LOCAL_PHOTO_INDEX_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-function writeLocalPhotoIndex(index) {
-  try {
-    localStorage.setItem(LOCAL_PHOTO_INDEX_KEY, JSON.stringify(index || {}));
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-function questionPhotoIndexKey(question) {
-  return String(question?.dataset?.questionId || '');
-}
-
-function rememberLocalPhotoMeta(question, file) {
-  if (!question || !file || !file._localPhotoId) return;
-  try {
-    const index = readLocalPhotoIndex();
-    const qid = questionPhotoIndexKey(question);
-    if (!qid) return;
-    if (!Array.isArray(index[qid])) index[qid] = [];
-    const meta = {
-      photoId: file._localPhotoId,
-      name: file._localPhotoName || file.name || 'photo.jpg',
-      mimeType: file._mimeType || file.type || 'image/jpeg'
-    };
-    const pos = index[qid].findIndex(function(item) { return item && item.photoId === meta.photoId; });
-    if (pos >= 0) index[qid][pos] = meta;
-    else index[qid].push(meta);
-    writeLocalPhotoIndex(index);
-  } catch (e) {
-    console.warn('Не удалось сохранить индекс локальной фотографии:', e);
-  }
-}
-
-function forgetLocalPhotoMeta(file) {
-  if (!file || !file._localPhotoId) return;
-  try {
-    const index = readLocalPhotoIndex();
-    Object.keys(index).forEach(function(qid) {
-      index[qid] = (index[qid] || []).filter(function(item) {
-        return !item || item.photoId !== file._localPhotoId;
-      });
-      if (!index[qid].length) delete index[qid];
-    });
-    writeLocalPhotoIndex(index);
-    try { localStorage.removeItem(LOCAL_PHOTO_DATA_PREFIX + file._localPhotoId); } catch (e) {}
-  } catch (e) {}
-}
-
-function saveLocalPhotoToStorage(record) {
-  if (!record || !record.photoId || !record.dataUrl) return false;
-  try {
-    localStorage.setItem(LOCAL_PHOTO_DATA_PREFIX + record.photoId, JSON.stringify(record));
-    return true;
-  } catch (e) {
-    // Большие фотографии могут не помещаться в localStorage — IndexedDB/Cache
-    // являются основными хранилищами, поэтому ошибка здесь не критична.
-    return false;
-  }
-}
-
-function loadLocalPhotoFromStorage(photoId) {
-  if (!photoId) return Promise.resolve(null);
-  try {
-    const raw = localStorage.getItem(LOCAL_PHOTO_DATA_PREFIX + photoId);
-    if (!raw) return Promise.resolve(null);
-    const parsed = JSON.parse(raw);
-    return Promise.resolve(parsed && parsed.dataUrl ? parsed : null);
-  } catch (e) {
-    return Promise.resolve(null);
-  }
-}
-
-function mergeLocalPhotoIndexIntoDraft(draft) {
-  if (!draft || !Array.isArray(draft.sections)) return draft;
-  const index = readLocalPhotoIndex();
-  const copy = JSON.parse(JSON.stringify(draft));
-  copy.sections.forEach(function(section) {
-    (section.questions || []).forEach(function(question) {
-      const indexed = index[String(question.id || '')] || [];
-      const existing = Array.isArray(question.photos) ? question.photos : [];
-      const seen = {};
-      const merged = [];
-      existing.concat(indexed).forEach(function(photo) {
-        if (!photo || !photo.photoId || seen[photo.photoId]) return;
-        seen[photo.photoId] = true;
-        merged.push({
-          photoId: photo.photoId,
-          name: photo.name || 'photo.jpg',
-          mimeType: photo.mimeType || 'image/jpeg'
-        });
-      });
-      question.photos = merged;
-    });
-  });
-  return copy;
-}
-
+const LOCAL_PHOTO_CACHE = 'audit_local_photos_cache_v3';
+const LOCAL_DRAFT_COOKIE_KEY = 'audit_local_draft_marker_v3';
 const SERVER_DRAFT_VERSION = '1.0';
 let localDraftSaveTimer = null;
 let draftSaveTimer = null;
 let draftSaveInProgress = false;
 let draftSaveQueued = false;
 let restoringServerDraft = false;
-let localDraftWriteQueue = Promise.resolve();
 
 function openLocalDraftDb() {
   return new Promise(function(resolve, reject) {
@@ -1187,53 +1069,11 @@ function dataUrlToFile(dataUrl, name, mimeType) {
   return base64ToFile(base64, name, mimeType);
 }
 
-// v54: усилено немедленное локальное сохранение фотографий и зафиксирован стиль кнопки выгрузки.
-function sanitizeLocalFilePart(value) {
-  return String(value || '')
-    .trim()
-    .replace(/[\\/:*?"<>|]+/g, '_')
-    .replace(/\s+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '') || 'без_названия';
-}
-
-function makeDraftArchiveName(objectName, auditDate) {
-  return 'архив фото_' + (auditDate || 'без_даты') + '_' + sanitizeLocalFilePart(objectName);
-}
-
-function getQuestionNumbers(question) {
-  const section = question ? question.closest('.section') : null;
-  const sectionNumber = section ? (parseInt(section.dataset.sectionIndex || '0', 10) + 1) : 1;
-  const title = question ? question.querySelector('.question-title') : null;
-  const m = title ? title.textContent.match(/№\s*(\d+)/) : null;
-  const pointNumber = m ? parseInt(m[1], 10) : 1;
-  return {sectionNumber, pointNumber};
-}
-
-function makeDraftPhotoName(question, photoIndex, file) {
-  const objectName = document.getElementById('objectName')?.value || '';
-  const auditDate = document.getElementById('auditDate')?.value || '';
-  const nums = getQuestionNumbers(question);
-  const ext = (file && file.name && file.name.lastIndexOf('.') >= 0)
-    ? file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-    : '.jpg';
-  return 'ФОТО_' +
-    (auditDate || 'без_даты') + '_' +
-    sanitizeLocalFilePart(objectName) + '_' +
-    nums.sectionNumber + '_' +
-    nums.pointNumber + '_' +
-    (photoIndex + 1) + ext;
-}
-
 function buildDraftPayload() {
-  const objectName = document.getElementById('objectName')?.value || '';
-  const auditDate = document.getElementById('auditDate')?.value || '';
   const payload = {
     version: SERVER_DRAFT_VERSION,
-    draftArchiveVersion: LOCAL_DRAFT_ARCHIVE_VERSION,
-    draftArchiveName: makeDraftArchiveName(objectName, auditDate),
-    objectName: objectName,
-    auditDate: auditDate,
+    objectName: document.getElementById('objectName')?.value || '',
+    auditDate: document.getElementById('auditDate')?.value || '',
     sections: []
   };
 
@@ -1255,14 +1095,11 @@ function buildDraftPayload() {
         answer: checked ? checked.value : '',
         comment: comment ? comment.value : '',
         photos: Array.isArray(question._photos)
-          ? question._photos.map(function(file, photoIndex) {
-              const photoId = file._localPhotoId || file._draftPhotoId || '';
-              const preferredName = makeDraftPhotoName(question, photoIndex, file);
-              try { file._localPhotoName = preferredName; } catch (e) {}
+          ? question._photos.map(function(file) {
               return {
-                photoId: photoId,
-                name: preferredName,
-                mimeType: file.type || file._mimeType || 'image/jpeg'
+                photoId: file._draftPhotoId || '',
+                name: file.name || 'photo.jpg',
+                mimeType: file.type || 'image/jpeg'
               };
             }).filter(function(p) { return !!p.photoId; })
           : []
@@ -1347,11 +1184,6 @@ function clearLocalStorageDraftAll() {
     localStorage.removeItem(LOCAL_DRAFT_CHUNK_COUNT_KEY);
   } catch (e) {}
   try { localStorage.removeItem(LOCAL_DRAFT_META_KEY); } catch (e) {}
-  try {
-    const photoIndex = readLocalPhotoIndex();
-    Object.keys(photoIndex).forEach(function(qid) { (photoIndex[qid] || []).forEach(function(p) { try { localStorage.removeItem('audit_local_photo_data_' + p.photoId); } catch (e) {} }); });
-    localStorage.removeItem(LOCAL_PHOTO_INDEX_KEY);
-  } catch (e) {}
   clearLocalDraftCookie();
 }
 
@@ -1430,103 +1262,68 @@ function requestPersistentStorage() {
   } catch (e) {}
 }
 
-function persistLocalPhoto(file, question) {
-  if (!file) return Promise.resolve(false);
-  if (!file._localPhotoId) {
-    file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
-  }
-  const photoId = file._localPhotoId;
-  if (question) rememberLocalPhotoMeta(question, file);
-  return fileToDataUrlForLocal(file).then(function(dataUrl) {
-    const record = {
-      photoId: photoId,
-      name: file._localPhotoName || file.name || 'photo.jpg',
-      mimeType: file._mimeType || file.type || 'image/jpeg',
-      dataUrl: dataUrl,
-      savedAt: new Date().toISOString()
-    };
-    saveLocalPhotoToStorage(record);
-    return Promise.all([
-      localDbPut(LOCAL_PHOTO_STORE, photoId, record).catch(function() { return false; }),
-      savePhotoToCache(photoId, dataUrl, record.name, record.mimeType).catch(function() { return false; })
-    ]).then(function() {
-      // Метаданные фото фиксируем отдельно от большого снимка формы.
-      if (question) rememberLocalPhotoMeta(question, file);
-      writeLocalDraftStorageSnapshot();
-      return true;
-    });
-  }).catch(function(error) {
-    console.warn('Не удалось сохранить локальную фотографию:', error);
-    return false;
-  });
-}
-
 function saveDraftToLocal() {
-  // Все записи локального черновика сериализуются, чтобы старый асинхронный
-  // снимок не мог перезаписать более свежий снимок без фотографий.
-  localDraftWriteQueue = localDraftWriteQueue.then(function() {
-    document.querySelectorAll('.question').forEach(function(question) {
-      (question._photos || []).forEach(function(file) {
-        if (!file._localPhotoId) {
-          file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
-        }
+  const payload = buildDraftPayload();
+  payload.savedAt = new Date().toISOString();
+  payload.appData = APP_DATA || null;
+  setLocalDraftCookie(payload.savedAt);
+  requestPersistentStorage();
+
+  const photoJobs = [];
+  document.querySelectorAll('.question').forEach(function(question) {
+    (question._photos || []).forEach(function(file) {
+      if (!file._localPhotoId) {
+        file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
+      }
+      photoJobs.push(
+        fileToDataUrlForLocal(file).then(function(dataUrl) {
+          const record = {
+            photoId: file._localPhotoId,
+            name: file.name || 'photo.jpg',
+            mimeType: file.type || 'image/jpeg',
+            dataUrl: dataUrl,
+            savedAt: payload.savedAt
+          };
+          return Promise.all([
+            localDbPut(LOCAL_PHOTO_STORE, file._localPhotoId, record).catch(function() {}),
+            savePhotoToCache(record.photoId, record.dataUrl, record.name, record.mimeType)
+          ]);
+        })
+      );
+    });
+  });
+
+  return Promise.all(photoJobs).then(function() {
+    payload.sections.forEach(function(sectionData) {
+      const section = document.querySelector('.section[data-section-index="' + CSS.escape(sectionData.index) + '"]');
+      if (!section) return;
+      sectionData.questions.forEach(function(q) {
+        const question = section.querySelector('.question[data-question-id="' + CSS.escape(q.id) + '"]');
+        if (!question) return;
+        q.photos = (question._photos || []).map(function(file) {
+          return {
+            photoId: file._localPhotoId || '',
+            name: file.name || 'photo.jpg',
+            mimeType: file.type || 'image/jpeg'
+          };
+        }).filter(function(x) { return !!x.photoId; });
       });
     });
-
-    const payload = buildDraftPayload();
-    payload.savedAt = new Date().toISOString();
-    payload.appData = APP_DATA || null;
-    setLocalDraftCookie(payload.savedAt);
-    requestPersistentStorage();
-
-    const photoJobs = [];
-    document.querySelectorAll('.question').forEach(function(question) {
-      (question._photos || []).forEach(function(file) {
-        if (!file._localPhotoId) {
-          file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
-        }
-        photoJobs.push(
-          fileToDataUrlForLocal(file).then(function(dataUrl) {
-            const record = {
-              photoId: file._localPhotoId,
-              name: file._localPhotoName || file.name || 'photo.jpg',
-              mimeType: file._mimeType || file.type || 'image/jpeg',
-              dataUrl: dataUrl,
-              savedAt: payload.savedAt
-            };
-            return Promise.all([
-              localDbPut(LOCAL_PHOTO_STORE, file._localPhotoId, record),
-              savePhotoToCache(record.photoId, record.dataUrl, record.name, record.mimeType)
-            ]);
-          })
-        );
-      });
-    });
-
-    return Promise.all(photoJobs).then(function() {
-      // Повторно строим метаданные ПОСЛЕ записи всех фотографий,
-      // чтобы photoId обязательно присутствовали в финальном снимке.
-      const latestPayload = buildDraftPayload();
-      latestPayload.savedAt = payload.savedAt;
-      latestPayload.appData = APP_DATA || null;
-      return Promise.all([
-        localDbPut(LOCAL_DRAFT_STORE, 'current', latestPayload),
-        saveDraftToCache(latestPayload)
-      ]).then(function() {
-        try {
-          writeLocalStorageDraftChunks(latestPayload);
-          localStorage.setItem(LOCAL_DRAFT_META_KEY, JSON.stringify({
-            savedAt: latestPayload.savedAt,
-            hasSections: Array.isArray(latestPayload.sections) && latestPayload.sections.length > 0
-          }));
-        } catch (storageError) {}
-      });
+    return Promise.all([
+      localDbPut(LOCAL_DRAFT_STORE, 'current', payload),
+      saveDraftToCache(payload)
+    ]).then(function() {
+      try {
+        writeLocalStorageDraftChunks(payload);
+        localStorage.setItem(LOCAL_DRAFT_META_KEY, JSON.stringify({
+          savedAt: payload.savedAt,
+          hasSections: Array.isArray(payload.sections) && payload.sections.length > 0
+        }));
+      } catch (storageError) {}
     });
   }).catch(function(error) {
     console.warn('Локальный черновик не сохранён:', error);
   });
-
-  return localDraftWriteQueue;
 }
 
 function writeLocalDraftStorageSnapshot() {
@@ -1594,7 +1391,7 @@ function loadLocalDraft() {
     candidates.sort(function(a, b) {
       return new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime();
     });
-    return { exists: true, draft: mergeLocalPhotoIndexIntoDraft(candidates[0]) };
+    return { exists: true, draft: candidates[0] };
   });
 }
 
@@ -1602,9 +1399,6 @@ function loadLocalDraftPhoto(photoId) {
   return localDbGet(LOCAL_PHOTO_STORE, photoId).catch(function() { return null; }).then(function(result) {
     if (result && result.dataUrl) return result;
     return loadPhotoFromCache(photoId);
-  }).then(function(result) {
-    if (result && result.dataUrl) return result;
-    return loadLocalPhotoFromStorage(photoId);
   });
 }
 
@@ -1639,19 +1433,287 @@ function fileToBase64ForDraft(file) {
 
 function uploadDraftPhoto(question, file) {
   // Фотография сохраняется локально вместе с черновиком.
-  // На сервер она попадёт только при нажатии «Выгрузить отчёт».
+  // На сервер она попадёт только при нажатии «ВЫГРУЗИТЬ ОТЧЁТ».
   scheduleLocalDraftSave();
 }
 
 function deleteDraftPhoto(file) {
   if (!file || !file._localPhotoId) return;
   const photoId = file._localPhotoId;
-  forgetLocalPhotoMeta(file);
   file._localPhotoId = '';
   localDbDelete(LOCAL_PHOTO_STORE, photoId).catch(function(error) {
     console.warn('Не удалось удалить локальную фотографию:', error);
   });
   scheduleLocalDraftSave();
+}
+
+function restoreLocalDraftPhoto(question, photoMeta, photoList, generation) {
+  return loadLocalDraftPhoto(photoMeta.photoId).then(function(result) {
+    if (!result || !result.dataUrl || (generation && generation !== draftRestoreGeneration)) return;
+    const file = dataUrlToFile(result.dataUrl, photoMeta.name || result.name || 'photo.jpg', photoMeta.mimeType || result.mimeType || 'image/jpeg');
+    file._localPhotoId = photoMeta.photoId;
+    if (!question._photos) question._photos = [];
+    question._photos.push(file);
+    addPhotoPreview(question, file, photoList);
+  });
+}
+
+function applyLocalDraft(draft) {
+  if (!draft) return;
+  applyDraftCommon(draft, true);
+}
+
+function applyDraftCommon(draft, fromLocal) {
+  if (!draft) return;
+
+  restoringServerDraft = true;
+
+  const objectInput = document.getElementById('objectName');
+  const dateInput = document.getElementById('auditDate');
+
+  if (objectInput) objectInput.value = draft.objectName || '';
+  if (dateInput) dateInput.value = draft.auditDate || '';
+
+  const sectionsByIndex = {};
+  document.querySelectorAll('.section').forEach(function(section) {
+    sectionsByIndex[String(section.dataset.sectionIndex || '')] = section;
+  });
+
+  const photoPromises = [];
+
+  (draft.sections || []).forEach(function(savedSection) {
+    const section = sectionsByIndex[String(savedSection.index || '')];
+    if (!section) return;
+
+    const skipped = !!savedSection.skipped;
+    section.classList.toggle('section-skipped', skipped);
+    section.dataset.skipped = skipped ? 'true' : 'false';
+
+    const responsible = section.querySelector('[data-responsible="true"]');
+    if (responsible) responsible.value = savedSection.responsible || '';
+
+    const skipButton = section.querySelector('[data-section-skip="true"]');
+    if (skipButton) skipButton.textContent = skipped ? 'Включить раздел' : 'Исключить раздел';
+
+    const questionsWrap = section.querySelector('.questions');
+    if (questionsWrap) questionsWrap.style.display = skipped ? 'none' : '';
+
+    const questionsById = {};
+    section.querySelectorAll('.question').forEach(function(question) {
+      questionsById[String(question.dataset.questionId || '')] = question;
+    });
+
+    (savedSection.questions || []).forEach(function(savedQuestion) {
+      const question = questionsById[String(savedQuestion.id || '')];
+      if (!question) return;
+
+      const radios = question.querySelectorAll('input[type="radio"]');
+      let selectedAnswer = '';
+      radios.forEach(function(radio) {
+        const checked = String(radio.value) === String(savedQuestion.answer || '');
+        radio.checked = checked;
+        if (checked) selectedAnswer = radio.value;
+      });
+
+      const comment = question.querySelector('[data-comment="true"]');
+      if (comment) comment.value = savedQuestion.comment || '';
+
+      if (selectedAnswer) {
+        onAnswerChange(question, selectedAnswer);
+      } else {
+        const status = question.querySelector('[data-status="true"]');
+        question.classList.remove('answered', 'invalid');
+        question.classList.add('unanswered');
+        if (status) {
+          status.className = 'status unanswered';
+          status.textContent = 'Не отвечено';
+        }
+      }
+
+      const photoList = question.querySelector('[data-photo-list="true"]');
+      // Полностью очищаем ранее восстановленные фотографии и DOM-миниатюры.
+      // Это важно, если черновик уже был автоматически восстановлен при открытии формы
+      // и пользователь повторно нажимает «Продолжить черновик».
+      question._photos = [];
+      if (photoList) photoList.innerHTML = '';
+      (savedQuestion.photos || []).forEach(function(photoMeta) {
+        if (photoMeta && photoMeta.photoId && photoList) {
+          photoPromises.push(
+            restoreLocalDraftPhoto(question, photoMeta, photoList, myGeneration).catch(function(error) {
+              console.warn('Не удалось восстановить локальную фотографию:', error);
+            })
+          );
+        }
+      });
+    });
+
+    updateSectionCompletion(section);
+  });
+
+  updateProgress();
+
+  const finishRestore = function() {
+    restoringServerDraft = false;
+    updateProgress();
+  };
+
+  if (photoPromises.length) Promise.all(photoPromises).then(finishRestore).catch(finishRestore);
+  else finishRestore();
+}
+
+function refreshDraftButtonState() {
+  const button = document.getElementById('continueDraftButton');
+  if (!button) return;
+
+  let localMarkerExists = false;
+  try {
+    const raw = localStorage.getItem(LOCAL_DRAFT_META_KEY);
+    localMarkerExists = !!(raw && JSON.parse(raw).savedAt);
+  } catch (e) {}
+  if (!localMarkerExists) localMarkerExists = !!getLocalDraftCookie();
+  if (localMarkerExists) {
+    button.disabled = false;
+    button.dataset.hasDraft = 'true';
+  }
+
+  loadLocalDraft().then(function(localResult) {
+    if (localResult && localResult.exists) {
+      button.disabled = false;
+      button.dataset.hasDraft = 'true';
+    }
+  }).catch(function() {});
+}
+
+function continueDraftFromServer() {
+  const button = document.getElementById('continueDraftButton');
+  if (!button || button.disabled) return;
+  // Если черновик уже автоматически восстановлен при открытии формы,
+  // повторно его не применяем — это предотвращает дублирование фотографий.
+  if (draftAutoRestored) return;
+  button.disabled = true;
+
+  loadLocalDraft().then(function(localResult) {
+    if (!localResult || !localResult.exists || !localResult.draft) {
+      button.disabled = false;
+      button.dataset.hasDraft = 'false';
+      alert('Локальный черновик не найден на этом устройстве.');
+      return;
+    }
+    const draft = localResult.draft;
+    if (!Array.isArray(draft.sections) || draft.sections.length === 0) {
+      button.disabled = false;
+      return;
+    }
+    if (!draft.appData && APP_DATA) draft.appData = APP_DATA;
+    applyLocalDraft(draft);
+    button.disabled = false;
+    button.dataset.hasDraft = 'true';
+  }).catch(function(error) {
+    console.warn('Локальный черновик недоступен:', error);
+    button.disabled = false;
+  });
+}
+
+function startNewAudit() {
+  draftAutoRestored = false;
+  draftRestoreGeneration++;
+  lastAppliedDraftKey = '';
+  lastAppliedDraftContentKey = '';
+  if (!confirm('Начать новый аудит?\n\nТекущие данные формы и локальный черновик будут удалены с этого устройства.')) return;
+
+  clearLocalDraft().then(function() {
+    clearFormForNewAudit();
+    const button = document.getElementById('continueDraftButton');
+    if (button) {
+      button.disabled = true;
+      button.dataset.hasDraft = 'false';
+    }
+  });
+}
+
+function fileToBase64ForDraft(file) {
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+
+    reader.onload = function() {
+      const result = String(reader.result || '');
+      const comma = result.indexOf(',');
+      resolve(comma >= 0 ? result.substring(comma + 1) : result);
+    };
+
+    reader.onerror = function() {
+      reject(reader.error || new Error('Не удалось прочитать фотографию.'));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function uploadDraftPhoto(question, file) {
+  if (!file || typeof google === 'undefined' || !google.script || !google.script.run) {
+    return;
+  }
+
+  fileToBase64ForDraft(file)
+    .then(function(data) {
+      return new Promise(function(resolve, reject) {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .saveAuditDraftPhoto({
+            questionId: String(question.dataset.questionId || ''),
+            name: file.name || 'photo.jpg',
+            mimeType: file.type || 'image/jpeg',
+            data: data
+          });
+      });
+    })
+    .then(function(result) {
+      if (result && result.photoId) {
+        file._draftPhotoId = result.photoId;
+        scheduleDraftSave();
+      }
+    })
+    .catch(function(error) {
+      console.warn('Не удалось сохранить фотографию черновика:', error);
+    });
+}
+
+function deleteDraftPhoto(file) {
+  if (!file || !file._draftPhotoId) return;
+
+  const photoId = file._draftPhotoId;
+  file._draftPhotoId = '';
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+
+  google.script.run
+    .withFailureHandler(function(error) {
+      console.warn('Не удалось удалить фото черновика:', error);
+    })
+    .deleteAuditDraftPhoto(photoId);
+}
+
+function base64ToFile(base64, name, mimeType) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  try {
+    return new File(
+      [bytes],
+      name || 'photo.jpg',
+      { type: mimeType || 'image/jpeg', lastModified: Date.now() }
+    );
+  } catch (e) {
+    return new Blob(
+      [bytes],
+      { type: mimeType || 'image/jpeg' }
+    );
+  }
 }
 
 function restoreDraftPhoto(question, photoMeta, photoList) {
@@ -1697,20 +1759,62 @@ function removeDraftAfterDecline() {
 function restoreLocalDraftPhoto(question, photoMeta, photoList) {
   return loadLocalDraftPhoto(photoMeta.photoId).then(function(result) {
     if (!result || !result.dataUrl) return;
-    const restoredName = photoMeta.name || result.name || 'photo.jpg';
-    const restoredMime = photoMeta.mimeType || result.mimeType || 'image/jpeg';
-    const file = dataUrlToFile(result.dataUrl, restoredName, restoredMime);
+    const file = dataUrlToFile(result.dataUrl, photoMeta.name || result.name || 'photo.jpg', photoMeta.mimeType || result.mimeType || 'image/jpeg');
     file._localPhotoId = photoMeta.photoId;
-    file._localPhotoName = restoredName;
-    file._mimeType = restoredMime;
     if (!question._photos) question._photos = [];
     question._photos.push(file);
     addPhotoPreview(question, file, photoList);
   });
 }
 
+function getDraftKey(draft) {
+  if (!draft) return '';
+  if (draft.savedAt) return String(draft.savedAt);
+  try {
+    return JSON.stringify({objectName:draft.objectName || '', auditDate:draft.auditDate || '', sections:draft.sections || []});
+  } catch (e) {
+    return '';
+  }
+}
+
+function getDraftContentKey(draft) {
+  if (!draft) return '';
+  try {
+    const normalized = {
+      objectName: draft.objectName || '',
+      auditDate: draft.auditDate || '',
+      sections: (draft.sections || []).map(function(section) {
+        return {
+          index: String(section.index || ''),
+          skipped: !!section.skipped,
+          responsible: section.responsible || '',
+          questions: (section.questions || []).map(function(q) {
+            return {
+              id: String(q.id || ''),
+              answer: q.answer || '',
+              comment: q.comment || '',
+              photos: (q.photos || []).map(function(photo) {
+                return String((photo && (photo.photoId || photo._localPhotoId)) || '');
+              })
+            };
+          })
+        };
+      })
+    };
+    return JSON.stringify(normalized);
+  } catch (e) {
+    return '';
+  }
+}
+
+let draftRestoreGeneration = 0;
+let draftAutoRestored = false;
+
 function applyLocalDraft(draft) {
-  if (!draft) return;
+  if (!draft || draftRestoreInProgress) return;
+  const key = getDraftKey(draft);
+  const contentKey = getDraftContentKey(draft);
+  if ((key && key === lastAppliedDraftKey) || (contentKey && contentKey === lastAppliedDraftContentKey)) return;
   applyDraftCommon(draft, true);
 }
 
@@ -1724,8 +1828,13 @@ function restoreServerDraft() {
 }
 
 function applyDraftCommon(draft, fromLocal) {
-  if (!draft) return;
+  if (!draft || draftRestoreInProgress) return;
 
+  const myGeneration = ++draftRestoreGeneration;
+  const draftKey = getDraftKey(draft);
+  if (draftKey && draftKey === lastAppliedDraftKey) return;
+
+  draftRestoreInProgress = true;
   restoringServerDraft = true;
 
   const objectInput = document.getElementById('objectName');
@@ -1814,6 +1923,11 @@ function applyDraftCommon(draft, fromLocal) {
 
   const finishRestore = function() {
     restoringServerDraft = false;
+    draftRestoreInProgress = false;
+    if (draftKey) lastAppliedDraftKey = draftKey;
+    const contentKey = getDraftContentKey(draft);
+    if (contentKey) lastAppliedDraftContentKey = contentKey;
+    if (fromLocal) draftAutoRestored = true;
     updateProgress();
     // Для локального черновика ничего не отправляем обратно на сервер
     // автоматически: локальная копия остаётся резервной, включая фото.
@@ -1839,12 +1953,11 @@ function getNewestDraft(serverResult, localResult) {
   const serverDraft = serverResult && serverResult.exists ? serverResult.draft : null;
   const localDraft = localResult && localResult.exists ? localResult.draft : null;
 
-  // PWA работает по принципу device-first: при восстановлении черновика
-  // всегда используем локальную копию этого устройства. Это критично для
-  // фотографий, которые хранятся локально и не должны подменяться старой
-  // серверной копией без фотографий.
-  if (localDraft) return { draft: localDraft, source: 'local' };
+  // Серверный черновик является общим для всех устройств. Пока сервер
+  // доступен, именно он должен иметь приоритет: локальная копия может быть
+  // старее или неполной и не должна перетирать данные на другом смартфоне.
   if (serverDraft) return { draft: serverDraft, source: 'server' };
+  if (localDraft) return { draft: localDraft, source: 'local' };
   return null;
 }
 
@@ -1882,23 +1995,43 @@ function continueDraftFromServer() {
   if (!button || button.disabled) return;
   button.disabled = true;
 
-  // В PWA восстановление черновика всегда выполняется с текущего устройства.
-  // Это гарантирует восстановление локальных фотографий вместе с ответами.
-  loadLocalDraft().then(function(localResult) {
-    const localDraft = localResult && localResult.exists ? localResult.draft : null;
-    if (!localDraft || !Array.isArray(localDraft.sections) || localDraft.sections.length === 0) {
+  const localPromise = loadLocalDraft();
+  const serverPromise = new Promise(function(resolve) {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      resolve({exists:false});
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(function(error) {
+        console.warn('Серверный черновик недоступен:', error);
+        resolve({exists:false});
+      })
+      .loadAuditDraft();
+  });
+
+  Promise.all([localPromise, serverPromise]).then(function(results) {
+    const newest = getNewestDraft(results[1], results[0]);
+    if (!newest) {
+      button.disabled = true;
+      button.dataset.hasDraft = 'false';
+      return;
+    }
+    if (!Array.isArray(newest.draft.sections) || newest.draft.sections.length === 0) {
+      console.warn('Обнаружен черновик без разделов:', newest.draft);
       button.disabled = false;
-      button.dataset.hasDraft = localDraft ? 'true' : 'false';
+      button.dataset.hasDraft = 'true';
       return;
     }
 
-    if (!localDraft.appData && APP_DATA) localDraft.appData = APP_DATA;
-    applyLocalDraft(localDraft);
+    if (newest.source === 'local') {
+      if (!newest.draft.appData && APP_DATA) newest.draft.appData = APP_DATA;
+      applyLocalDraft(newest.draft);
+    } else {
+      applyServerDraft(newest.draft);
+    }
     button.disabled = false;
     button.dataset.hasDraft = 'true';
-  }).catch(function(error) {
-    console.warn('Не удалось восстановить локальный черновик:', error);
-    button.disabled = false;
   });
 }
 
@@ -1992,6 +2125,9 @@ function clearFormForNewAudit() {
 }
 
 let totalQuestions = 0;
+let lastAppliedDraftKey = '';
+let lastAppliedDraftContentKey = '';
+let draftRestoreInProgress = false;
 
 
 /* ==========================================================
@@ -2008,6 +2144,9 @@ document.addEventListener(
     if (continueButton) {
       continueButton.addEventListener('click', continueDraftFromServer);
     }
+
+    const submitButton = document.getElementById('submitButton');
+    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ АУДИТ';
 
     if (newButton) {
       newButton.addEventListener('click', startNewAudit);
@@ -2219,7 +2358,7 @@ function renderApp(data) {
       type="button"
       class="submit-button">
 
-      ВЫГРУЗИТЬ ОТЧЁТ
+      ВЫГРУЗИТЬ АУДИТ
 
     </button>
 
@@ -2939,11 +3078,9 @@ function addPhotos(
       available
     )
     .forEach(
-      function(file, photoOffset) {
+      function(file) {
 
         file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
-        file._localPhotoName = makeDraftPhotoName(question, question._photos.length + photoOffset, file);
-        file._mimeType = file.type || 'image/jpeg';
 
         question._photos.push(
           file
@@ -2955,13 +3092,6 @@ function addPhotos(
           list
         );
 
-        // Сразу фиксируем photoId в локальном снимке, ещё до async-записи
-        // бинарного содержимого. Сам файл параллельно сохраняется локально.
-        writeLocalDraftStorageSnapshot();
-
-        // Фото пишется в локальные хранилища сразу, не дожидаясь таймера
-        // автосохранения всего черновика.
-        persistLocalPhoto(file, question);
         scheduleLocalDraftSave();
 
       }
@@ -3712,7 +3842,7 @@ async function submitForm() {
       if (!navigator.onLine) {
         showLoading(false);
         button.disabled = false;
-        alert('Нет подключения к интернету. Черновик сохранён на этом устройстве. Подключитесь к интернету и нажмите «Выгрузить отчёт».');
+        alert('Нет подключения к интернету. Черновик сохранён на этом устройстве. Подключитесь к интернету и нажмите «ВЫГРУЗИТЬ ОТЧЁТ».');
         return;
       }
       if (!url) {
@@ -4033,23 +4163,5 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
-
-<script id="v54-submit-button-label">
-  document.addEventListener('DOMContentLoaded', function() {
-    var btn = document.getElementById('submitButton');
-    if (btn) btn.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
-  });
-</script>
-
-<script>
-(function(){
-  function fixExportButtonLabel(){
-    var btn = document.getElementById('submitBtn') || document.querySelector('button[data-submit-audit]');
-    if (btn) btn.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
-  }
-  document.addEventListener('DOMContentLoaded', fixExportButtonLabel);
-  setTimeout(fixExportButtonLabel, 500);
-})();
-</script>
 </body>
 </html>
