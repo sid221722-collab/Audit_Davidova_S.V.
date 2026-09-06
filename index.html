@@ -4,31 +4,33 @@
   <base target="_top">
 
   <meta name="viewport"
-        content="width=device-width, initial-scale=1, minimum-scale=0.25, maximum-scale=5, user-scalable=yes, viewport-fit=cover">
-  <style id="stable-mobile-viewport-v47">
-    /* Базовая разметка остаётся 900px; масштабирование выполняется только CSS,
-       а не изменением viewport при фокусе. Это предотвращает авто-zoom Safari/iOS. */
-    html, body {
-      width: 100%;
-      min-width: 0;
-      overflow-x: hidden;
-    }
-    body {
-      zoom: 1;
-    }
-    @supports (-webkit-touch-callout: none) {
-      input, textarea, select {
-        font-size: 30px !important;
+        content="width=900, initial-scale=0.5, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+  <script>
+    (function () {
+      try {
+        var viewport = document.querySelector('meta[name="viewport"]');
+        if (!viewport) return;
+        var screenWidth = Math.min(
+          window.screen && window.screen.width ? window.screen.width : 900,
+          window.screen && window.screen.height ? window.screen.height : 900
+        );
+        var scale = Math.min(1, Math.max(0.1, screenWidth / 900));
+        viewport.setAttribute(
+          'content',
+          'width=900, initial-scale=' + scale.toFixed(4) + ', minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover'
+        );
+      } catch (e) {
+        console.warn('Не удалось настроить масштаб по ширине экрана:', e);
       }
-    }
-  </style>
+    })();
+  </script>
 
   <script src="./app-config.js"></script>
   <link rel="manifest" href="./manifest.webmanifest">
   <meta name="theme-color" content="#1769e0">
 
   <title>Аудит</title>
-  <meta name="pwa-version" content="v46">
+  <meta name="pwa-version" content="v49">
 
   <style>
 :root{--bg:#f3f5f7;--card:#fff;--text:#202124;--muted:#687078;--line:#c7cdd4;--blue:#1769e0;--green:#188038;--red:#c5221f;--orange:#b06000;--radius:12px}
@@ -815,38 +817,60 @@ button.photo-delete,
 </style>
 
 
-<style id="prevent-ios-input-zoom-v47">
-html, body {
+<style id="prevent-ios-input-zoom-v49">
+html, body, input, select, textarea {
   -webkit-text-size-adjust: 100% !important;
   text-size-adjust: 100% !important;
-}
-input, textarea, select {
-  -webkit-text-size-adjust: 100% !important;
-  text-size-adjust: 100% !important;
-  font-size: 30px !important;
 }
 </style>
+<script id="ios-no-auto-zoom-v49">
+(function(){
+  try {
+    var vp = document.querySelector('meta[name="viewport"]');
+    if (!vp) return;
+    var baseContent = vp.getAttribute('content') || '';
+    var locked = false;
+    var timer = null;
+    function isEditable(el){
+      if (!el || !el.tagName) return false;
+      var tag = el.tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || tag === 'select';
+    }
+    function lockZoom(){
+      if (locked) return;
+      locked = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      vp.setAttribute('content', 'width=900, initial-scale=0.5, minimum-scale=0.1, maximum-scale=1, user-scalable=yes, viewport-fit=cover');
+    }
+    function restoreZoom(){
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function(){
+        var active = document.activeElement;
+        if (!isEditable(active)) {
+          vp.setAttribute('content', baseContent);
+          locked = false;
+        }
+      }, 60);
+    }
+    document.addEventListener('touchstart', function(e){
+      var target = e.target;
+      if (isEditable(target)) lockZoom();
+    }, {passive:true, capture:true});
+    document.addEventListener('focusin', function(e){
+      if (isEditable(e.target)) lockZoom();
+    }, true);
+    document.addEventListener('focusout', function(e){
+      if (isEditable(e.target)) restoreZoom();
+    }, true);
+  } catch(e) {
+    console.warn('iOS zoom guard disabled:', e);
+  }
+})();
+</script>
 </head>
 
 
 <body>
-<script id="mobile-fit-v47">
-(function(){
-  function fit(){
-    try {
-      var base = 900;
-      var w = document.documentElement.clientWidth || window.innerWidth || base;
-      var z = Math.min(1, Math.max(0.25, w / base));
-      document.body.style.zoom = z.toFixed(4);
-      document.body.dataset.fitScale = z.toFixed(4);
-    } catch(e) {}
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fit); else fit();
-  window.addEventListener('resize', fit);
-  window.addEventListener('orientationchange', function(){ setTimeout(fit, 100); });
-})();
-</script>
-
 
   <!-- ======================================================
        ШАПКА
