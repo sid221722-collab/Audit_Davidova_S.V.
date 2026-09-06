@@ -1066,6 +1066,7 @@ function dataUrlToFile(dataUrl, name, mimeType) {
   return base64ToFile(base64, name, mimeType);
 }
 
+// v53: локальные фото сохраняются по _localPhotoId; _draftPhotoId оставлен для совместимости.
 function buildDraftPayload() {
   const payload = {
     version: SERVER_DRAFT_VERSION,
@@ -1094,7 +1095,7 @@ function buildDraftPayload() {
         photos: Array.isArray(question._photos)
           ? question._photos.map(function(file) {
               return {
-                photoId: file._draftPhotoId || '',
+                photoId: file._localPhotoId || file._draftPhotoId || '',
                 name: file.name || 'photo.jpg',
                 mimeType: file.type || 'image/jpeg'
               };
