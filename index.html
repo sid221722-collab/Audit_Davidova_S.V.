@@ -1110,6 +1110,149 @@ function makeDraftPhotoName(question, photoIndex, file) {
     (photoIndex + 1) + ext;
 }
 
+
+/* ==========================================================
+   ЛОКАЛЬНЫЙ ИНДЕКС ФОТОГРАФИЙ
+   ========================================================== */
+
+const LOCAL_PHOTO_INDEX_KEY = 'audit_local_photo_index_v1';
+const LOCAL_PHOTO_DATA_PREFIX = 'audit_local_photo_data_';
+
+function readLocalPhotoIndex() {
+  try {
+    const raw = localStorage.getItem(LOCAL_PHOTO_INDEX_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeLocalPhotoIndex(index) {
+  try {
+    localStorage.setItem(LOCAL_PHOTO_INDEX_KEY, JSON.stringify(index || {}));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getQuestionLocalPhotoKey(question) {
+  return String(question?.dataset?.questionId || '');
+}
+
+function rememberLocalPhotoMeta(question, file) {
+  if (!question || !file) return;
+  if (!file._localPhotoId) return;
+
+  const qid = getQuestionLocalPhotoKey(question);
+  if (!qid) return;
+
+  const index = readLocalPhotoIndex();
+  if (!Array.isArray(index[qid])) index[qid] = [];
+
+  const meta = {
+    photoId: file._localPhotoId,
+    name: file._localPhotoName || file.name || 'photo.jpg',
+    mimeType: file._mimeType || file.type || 'image/jpeg'
+  };
+
+  const existing = index[qid].findIndex(function(item) {
+    return item && item.photoId === meta.photoId;
+  });
+
+  if (existing >= 0) {
+    index[qid][existing] = meta;
+  } else {
+    index[qid].push(meta);
+  }
+
+  writeLocalPhotoIndex(index);
+}
+
+function forgetLocalPhotoMeta(file) {
+  if (!file || !file._localPhotoId) return;
+  const photoId = file._localPhotoId;
+  const index = readLocalPhotoIndex();
+
+  Object.keys(index).forEach(function(qid) {
+    index[qid] = (index[qid] || []).filter(function(item) {
+      return !item || item.photoId !== photoId;
+    });
+    if (!index[qid].length) delete index[qid];
+  });
+
+  writeLocalPhotoIndex(index);
+
+  try {
+    localStorage.removeItem(LOCAL_PHOTO_DATA_PREFIX + photoId);
+  } catch (e) {}
+}
+
+function saveLocalPhotoToStorage(record) {
+  if (!record || !record.photoId || !record.dataUrl) return false;
+  try {
+    // Дополнительная резервная копия. Основное хранилище — IndexedDB.
+    localStorage.setItem(
+      LOCAL_PHOTO_DATA_PREFIX + record.photoId,
+      JSON.stringify({
+        photoId: record.photoId,
+        name: record.name || 'photo.jpg',
+        mimeType: record.mimeType || 'image/jpeg',
+        dataUrl: record.dataUrl
+      })
+    );
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function loadLocalPhotoFromStorage(photoId) {
+  if (!photoId) return Promise.resolve(null);
+  try {
+    const raw = localStorage.getItem(LOCAL_PHOTO_DATA_PREFIX + photoId);
+    if (!raw) return Promise.resolve(null);
+    const parsed = JSON.parse(raw);
+    return Promise.resolve(parsed && parsed.dataUrl ? parsed : null);
+  } catch (e) {
+    return Promise.resolve(null);
+  }
+}
+
+function mergeLocalPhotoIndexIntoDraft(draft) {
+  if (!draft || !Array.isArray(draft.sections)) return draft;
+
+  const index = readLocalPhotoIndex();
+
+  draft.sections.forEach(function(section) {
+    (section.questions || []).forEach(function(question) {
+      const indexed = index[String(question.id || '')] || [];
+      const existing = Array.isArray(question.photos) ? question.photos : [];
+
+      const seen = {};
+      existing.forEach(function(item) {
+        if (item && item.photoId) seen[item.photoId] = true;
+      });
+
+      indexed.forEach(function(item) {
+        if (item && item.photoId && !seen[item.photoId]) {
+          existing.push({
+            photoId: item.photoId,
+            name: item.name || 'photo.jpg',
+            mimeType: item.mimeType || 'image/jpeg'
+          });
+          seen[item.photoId] = true;
+        }
+      });
+
+      question.photos = existing;
+    });
+  });
+
+  return draft;
+}
+
 function buildDraftPayload() {
   const objectName = document.getElementById('objectName')?.value || '';
   const auditDate = document.getElementById('auditDate')?.value || '';
