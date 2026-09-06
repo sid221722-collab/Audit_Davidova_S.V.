@@ -823,6 +823,10 @@ html, body, input, select, textarea {
   text-size-adjust: 100% !important;
 }
 </style>
+
+<style id="v54-submit-button-style">
+  .submit-button { font-size: 35px !important; text-transform: uppercase !important; }
+</style>
 </head>
 
 
@@ -1066,7 +1070,7 @@ function dataUrlToFile(dataUrl, name, mimeType) {
   return base64ToFile(base64, name, mimeType);
 }
 
-// v53: локальные фото сохраняются по _localPhotoId; _draftPhotoId оставлен для совместимости.
+// v54: усилено немедленное локальное сохранение фотографий и зафиксирован стиль кнопки выгрузки.
 function buildDraftPayload() {
   const payload = {
     version: SERVER_DRAFT_VERSION,
@@ -1260,7 +1264,45 @@ function requestPersistentStorage() {
   } catch (e) {}
 }
 
+function persistLocalPhoto(file) {
+  if (!file) return Promise.resolve(false);
+  if (!file._localPhotoId) {
+    file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
+  }
+  const photoId = file._localPhotoId;
+  return fileToDataUrlForLocal(file).then(function(dataUrl) {
+    const record = {
+      photoId: photoId,
+      name: file.name || 'photo.jpg',
+      mimeType: file.type || 'image/jpeg',
+      dataUrl: dataUrl,
+      savedAt: new Date().toISOString()
+    };
+    return Promise.all([
+      localDbPut(LOCAL_PHOTO_STORE, photoId, record),
+      savePhotoToCache(photoId, dataUrl, record.name, record.mimeType)
+    ]).then(function() {
+      // После фактического сохранения бинарного фото ещё раз сохраняем
+      // метаданные черновика, чтобы связь photoId -> фото гарантированно была.
+      writeLocalDraftStorageSnapshot();
+      return true;
+    });
+  }).catch(function(error) {
+    console.warn('Не удалось отдельно сохранить локальную фотографию:', error);
+    return false;
+  });
+}
+
 function saveDraftToLocal() {
+  // Сначала гарантируем идентификаторы всех локальных фотографий,
+  // затем строим снимок черновика.
+  document.querySelectorAll('.question').forEach(function(question) {
+    (question._photos || []).forEach(function(file) {
+      if (!file._localPhotoId) {
+        file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
+      }
+    });
+  });
   const payload = buildDraftPayload();
   payload.savedAt = new Date().toISOString();
   payload.appData = APP_DATA || null;
@@ -2025,7 +2067,7 @@ function renderApp(data) {
       type="button"
       class="submit-button">
 
-      Выгрузить отчёт
+      ВЫГРУЗИТЬ АУДИТ
 
     </button>
 
@@ -2759,6 +2801,9 @@ function addPhotos(
           list
         );
 
+        // Фото пишется в локальные хранилища сразу, не дожидаясь таймера
+        // автосохранения всего черновика.
+        persistLocalPhoto(file);
         scheduleLocalDraftSave();
 
       }
@@ -3830,5 +3875,12 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+
+<script id="v54-submit-button-label">
+  document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('submitButton');
+    if (btn) btn.textContent = 'ВЫГРУЗИТЬ АУДИТ';
+  });
+</script>
 </body>
 </html>
