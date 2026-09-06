@@ -1608,6 +1608,8 @@ function continueDraftFromServer() {
 }
 
 function startNewAudit() {
+  lastAppliedDraftKey = '';
+  lastAppliedDraftContentKey = '';
   if (!confirm('Начать новый аудит?\n\nТекущие данные формы и локальный черновик будут удалены с этого устройства.')) return;
 
   clearLocalDraft().then(function() {
@@ -1766,10 +1768,41 @@ function getDraftKey(draft) {
   }
 }
 
+function getDraftContentKey(draft) {
+  if (!draft) return '';
+  try {
+    const normalized = {
+      objectName: draft.objectName || '',
+      auditDate: draft.auditDate || '',
+      sections: (draft.sections || []).map(function(section) {
+        return {
+          index: String(section.index || ''),
+          skipped: !!section.skipped,
+          responsible: section.responsible || '',
+          questions: (section.questions || []).map(function(q) {
+            return {
+              id: String(q.id || ''),
+              answer: q.answer || '',
+              comment: q.comment || '',
+              photos: (q.photos || []).map(function(photo) {
+                return String((photo && (photo.photoId || photo._localPhotoId)) || '');
+              })
+            };
+          })
+        };
+      })
+    };
+    return JSON.stringify(normalized);
+  } catch (e) {
+    return '';
+  }
+}
+
 function applyLocalDraft(draft) {
   if (!draft || draftRestoreInProgress) return;
   const key = getDraftKey(draft);
-  if (key && key === lastAppliedDraftKey) return;
+  const contentKey = getDraftContentKey(draft);
+  if ((key && key === lastAppliedDraftKey) || (contentKey && contentKey === lastAppliedDraftContentKey)) return;
   applyDraftCommon(draft, true);
 }
 
@@ -1879,6 +1912,8 @@ function applyDraftCommon(draft, fromLocal) {
     restoringServerDraft = false;
     draftRestoreInProgress = false;
     if (draftKey) lastAppliedDraftKey = draftKey;
+    const contentKey = getDraftContentKey(draft);
+    if (contentKey) lastAppliedDraftContentKey = contentKey;
     updateProgress();
     // Для локального черновика ничего не отправляем обратно на сервер
     // автоматически: локальная копия остаётся резервной, включая фото.
@@ -2077,6 +2112,7 @@ function clearFormForNewAudit() {
 
 let totalQuestions = 0;
 let lastAppliedDraftKey = '';
+let lastAppliedDraftContentKey = '';
 let draftRestoreInProgress = false;
 
 
@@ -2094,6 +2130,9 @@ document.addEventListener(
     if (continueButton) {
       continueButton.addEventListener('click', continueDraftFromServer);
     }
+
+    const submitButton = document.getElementById('submitButton');
+    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ АУДИТ';
 
     if (newButton) {
       newButton.addEventListener('click', startNewAudit);
