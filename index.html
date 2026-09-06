@@ -1531,7 +1531,11 @@ function applyDraftCommon(draft, fromLocal) {
       }
 
       const photoList = question.querySelector('[data-photo-list="true"]');
+      // Полностью очищаем ранее восстановленные фотографии и DOM-миниатюры.
+      // Это важно, если черновик уже был автоматически восстановлен при открытии формы
+      // и пользователь повторно нажимает «Продолжить черновик».
       question._photos = [];
+      if (photoList) photoList.innerHTML = '';
       (savedQuestion.photos || []).forEach(function(photoMeta) {
         if (photoMeta && photoMeta.photoId && photoList) {
           photoPromises.push(
