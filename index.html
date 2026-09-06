@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#1769e0">
 
   <title>Аудит</title>
-  <meta name="pwa-version" content="v49">
+  <meta name="pwa-version" content="v46">
 
   <style>
 :root{--bg:#f3f5f7;--card:#fff;--text:#202124;--muted:#687078;--line:#c7cdd4;--blue:#1769e0;--green:#188038;--red:#c5221f;--orange:#b06000;--radius:12px}
@@ -817,56 +817,12 @@ button.photo-delete,
 </style>
 
 
-<style id="prevent-ios-input-zoom-v49">
+<style id="prevent-ios-input-zoom-v41">
 html, body, input, select, textarea {
   -webkit-text-size-adjust: 100% !important;
   text-size-adjust: 100% !important;
 }
 </style>
-<script id="ios-no-auto-zoom-v49">
-(function(){
-  try {
-    var vp = document.querySelector('meta[name="viewport"]');
-    if (!vp) return;
-    var baseContent = vp.getAttribute('content') || '';
-    var locked = false;
-    var timer = null;
-    function isEditable(el){
-      if (!el || !el.tagName) return false;
-      var tag = el.tagName.toLowerCase();
-      return tag === 'input' || tag === 'textarea' || tag === 'select';
-    }
-    function lockZoom(){
-      if (locked) return;
-      locked = true;
-      if (timer) { clearTimeout(timer); timer = null; }
-      vp.setAttribute('content', 'width=900, initial-scale=0.5, minimum-scale=0.1, maximum-scale=1, user-scalable=yes, viewport-fit=cover');
-    }
-    function restoreZoom(){
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(function(){
-        var active = document.activeElement;
-        if (!isEditable(active)) {
-          vp.setAttribute('content', baseContent);
-          locked = false;
-        }
-      }, 60);
-    }
-    document.addEventListener('touchstart', function(e){
-      var target = e.target;
-      if (isEditable(target)) lockZoom();
-    }, {passive:true, capture:true});
-    document.addEventListener('focusin', function(e){
-      if (isEditable(e.target)) lockZoom();
-    }, true);
-    document.addEventListener('focusout', function(e){
-      if (isEditable(e.target)) restoreZoom();
-    }, true);
-  } catch(e) {
-    console.warn('iOS zoom guard disabled:', e);
-  }
-})();
-</script>
 </head>
 
 
