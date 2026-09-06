@@ -991,7 +991,7 @@ const LOCAL_DRAFT_CHUNK_PREFIX = 'audit_local_draft_chunk_v4_';
 const LOCAL_DRAFT_CHUNK_COUNT_KEY = 'audit_local_draft_chunk_count_v4';
 const LOCAL_DRAFT_CACHE = 'audit_local_draft_cache_v4';
 const LOCAL_DRAFT_CACHE_URL = '/__audit_local_draft_v3__';
-const LOCAL_PHOTO_CACHE = 'audit_local_photos_cache_v4';
+const LOCAL_PHOTO_CACHE = 'audit_local_photos_cache_v5';
 const LOCAL_DRAFT_ARCHIVE_VERSION = 'v1';
 const LOCAL_DRAFT_COOKIE_KEY = 'audit_local_draft_marker_v4';
 const SERVER_DRAFT_VERSION = '1.0';
@@ -1713,11 +1713,12 @@ function getNewestDraft(serverResult, localResult) {
   const serverDraft = serverResult && serverResult.exists ? serverResult.draft : null;
   const localDraft = localResult && localResult.exists ? localResult.draft : null;
 
-  // Серверный черновик является общим для всех устройств. Пока сервер
-  // доступен, именно он должен иметь приоритет: локальная копия может быть
-  // старее или неполной и не должна перетирать данные на другом смартфоне.
-  if (serverDraft) return { draft: serverDraft, source: 'server' };
+  // PWA работает по принципу device-first: при восстановлении черновика
+  // всегда используем локальную копию этого устройства. Это критично для
+  // фотографий, которые хранятся локально и не должны подменяться старой
+  // серверной копией без фотографий.
   if (localDraft) return { draft: localDraft, source: 'local' };
+  if (serverDraft) return { draft: serverDraft, source: 'server' };
   return null;
 }
 
@@ -1755,43 +1756,23 @@ function continueDraftFromServer() {
   if (!button || button.disabled) return;
   button.disabled = true;
 
-  const localPromise = loadLocalDraft();
-  const serverPromise = new Promise(function(resolve) {
-    if (typeof google === 'undefined' || !google.script || !google.script.run) {
-      resolve({exists:false});
-      return;
-    }
-    google.script.run
-      .withSuccessHandler(resolve)
-      .withFailureHandler(function(error) {
-        console.warn('Серверный черновик недоступен:', error);
-        resolve({exists:false});
-      })
-      .loadAuditDraft();
-  });
-
-  Promise.all([localPromise, serverPromise]).then(function(results) {
-    const newest = getNewestDraft(results[1], results[0]);
-    if (!newest) {
-      button.disabled = true;
-      button.dataset.hasDraft = 'false';
-      return;
-    }
-    if (!Array.isArray(newest.draft.sections) || newest.draft.sections.length === 0) {
-      console.warn('Обнаружен черновик без разделов:', newest.draft);
+  // В PWA восстановление черновика всегда выполняется с текущего устройства.
+  // Это гарантирует восстановление локальных фотографий вместе с ответами.
+  loadLocalDraft().then(function(localResult) {
+    const localDraft = localResult && localResult.exists ? localResult.draft : null;
+    if (!localDraft || !Array.isArray(localDraft.sections) || localDraft.sections.length === 0) {
       button.disabled = false;
-      button.dataset.hasDraft = 'true';
+      button.dataset.hasDraft = localDraft ? 'true' : 'false';
       return;
     }
 
-    if (newest.source === 'local') {
-      if (!newest.draft.appData && APP_DATA) newest.draft.appData = APP_DATA;
-      applyLocalDraft(newest.draft);
-    } else {
-      applyServerDraft(newest.draft);
-    }
+    if (!localDraft.appData && APP_DATA) localDraft.appData = APP_DATA;
+    applyLocalDraft(localDraft);
     button.disabled = false;
     button.dataset.hasDraft = 'true';
+  }).catch(function(error) {
+    console.warn('Не удалось восстановить локальный черновик:', error);
+    button.disabled = false;
   });
 }
 
