@@ -823,9 +823,6 @@ html, body, input, select, textarea {
   text-size-adjust: 100% !important;
 }
 </style>
-<style id="v46-button-and-draft-fix">
-.submit-button { font-size: 35px !important; }
-</style>
 </head>
 
 
@@ -1447,110 +1444,29 @@ function deleteDraftPhoto(file) {
   scheduleLocalDraftSave();
 }
 
-function fileToBase64ForDraft(file) {
-  return new Promise(function(resolve, reject) {
-    const reader = new FileReader();
-
-    reader.onload = function() {
-      const result = String(reader.result || '');
-      const comma = result.indexOf(',');
-      resolve(comma >= 0 ? result.substring(comma + 1) : result);
-    };
-
-    reader.onerror = function() {
-      reject(reader.error || new Error('Не удалось прочитать фотографию.'));
-    };
-
-    reader.readAsDataURL(file);
-  });
-}
-
-function uploadDraftPhoto(question, file) {
-  if (!file || typeof google === 'undefined' || !google.script || !google.script.run) {
-    return;
-  }
-
-  fileToBase64ForDraft(file)
-    .then(function(data) {
-      return new Promise(function(resolve, reject) {
-        google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(reject)
-          .saveAuditDraftPhoto({
-            questionId: String(question.dataset.questionId || ''),
-            name: file.name || 'photo.jpg',
-            mimeType: file.type || 'image/jpeg',
-            data: data
-          });
-      });
-    })
-    .then(function(result) {
-      if (result && result.photoId) {
-        file._draftPhotoId = result.photoId;
-        scheduleDraftSave();
-      }
-    })
-    .catch(function(error) {
-      console.warn('Не удалось сохранить фотографию черновика:', error);
-    });
-}
-
-function deleteDraftPhoto(file) {
-  if (!file || !file._draftPhotoId) return;
-
-  const photoId = file._draftPhotoId;
-  file._draftPhotoId = '';
-
-  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
-
-  google.script.run
-    .withFailureHandler(function(error) {
-      console.warn('Не удалось удалить фото черновика:', error);
-    })
-    .deleteAuditDraftPhoto(photoId);
-}
-
-function base64ToFile(base64, name, mimeType) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  try {
-    return new File(
-      [bytes],
-      name || 'photo.jpg',
-      { type: mimeType || 'image/jpeg', lastModified: Date.now() }
-    );
-  } catch (e) {
-    return new Blob(
-      [bytes],
-      { type: mimeType || 'image/jpeg' }
-    );
-  }
-}
-
-function restoreDraftPhoto(question, photoMeta, photoList, generation) {
+function restoreDraftPhoto(question, photoMeta, photoList) {
   if (!photoMeta || !photoMeta.photoId) return Promise.resolve();
-  const expectedGeneration = generation || draftRestoreGeneration;
+
   return new Promise(function(resolve, reject) {
     google.script.run
       .withSuccessHandler(function(result) {
         try {
-          if (expectedGeneration !== draftRestoreGeneration) return resolve();
-          if (!photoList) return resolve();
-          if ([].slice.call(photoList.children).some(function(el) { return el.dataset && el.dataset.photoId === String(photoMeta.photoId); })) return resolve();
+          const file = base64ToFile(
+            result.data,
+            photoMeta.name || result.name || 'photo.jpg',
+            photoMeta.mimeType || result.mimeType || 'image/jpeg'
+          );
 
-          const file = base64ToFile(result.data, photoMeta.name || result.name || 'photo.jpg', photoMeta.mimeType || result.mimeType || 'image/jpeg');
           file._draftPhotoId = photoMeta.photoId;
+
           if (!question._photos) question._photos = [];
-          if (question._photos.some(function(f) { return f._draftPhotoId === photoMeta.photoId; })) return resolve();
           question._photos.push(file);
+
           addPhotoPreview(question, file, photoList);
           resolve();
-        } catch (e) { reject(e); }
+        } catch (e) {
+          reject(e);
+        }
       })
       .withFailureHandler(reject)
       .loadAuditDraftPhoto(photoMeta.photoId);
@@ -1568,20 +1484,20 @@ function removeDraftAfterDecline() {
     .removeAuditDraft();
 }
 
-function restoreLocalDraftPhoto(question, photoMeta, photoList, generation) {
-  const expectedGeneration = generation || draftRestoreGeneration;
+function restoreLocalDraftPhoto(question, photoMeta, photoList) {
   return loadLocalDraftPhoto(photoMeta.photoId).then(function(result) {
-    if (expectedGeneration !== draftRestoreGeneration) return;
-    if (!result || !result.dataUrl || !photoList) return;
-    if ([].slice.call(photoList.children).some(function(el) { return el.dataset && el.dataset.photoId === String(photoMeta.photoId); })) return;
-
+    if (!result || !result.dataUrl) return;
     const file = dataUrlToFile(result.dataUrl, photoMeta.name || result.name || 'photo.jpg', photoMeta.mimeType || result.mimeType || 'image/jpeg');
     file._localPhotoId = photoMeta.photoId;
     if (!question._photos) question._photos = [];
-    if (question._photos.some(function(f) { return f._localPhotoId === photoMeta.photoId; })) return;
     question._photos.push(file);
     addPhotoPreview(question, file, photoList);
   });
+}
+
+function applyLocalDraft(draft) {
+  if (!draft) return;
+  applyDraftCommon(draft, true);
 }
 
 function restoreServerDraft() {
@@ -1594,14 +1510,13 @@ function restoreServerDraft() {
 }
 
 function applyDraftCommon(draft, fromLocal) {
-  if (!draft || draftRestoreInProgress) return;
+  if (!draft) return;
 
-  draftRestoreInProgress = true;
   restoringServerDraft = true;
-  const generation = ++draftRestoreGeneration;
 
   const objectInput = document.getElementById('objectName');
   const dateInput = document.getElementById('auditDate');
+
   if (objectInput) objectInput.value = draft.objectName || '';
   if (dateInput) dateInput.value = draft.auditDate || '';
 
@@ -1624,7 +1539,9 @@ function applyDraftCommon(draft, fromLocal) {
     if (responsible) responsible.value = savedSection.responsible || '';
 
     const skipButton = section.querySelector('[data-section-skip="true"]');
-    if (skipButton) skipButton.textContent = skipped ? 'Включить раздел' : 'Исключить раздел';
+    if (skipButton) {
+      skipButton.textContent = skipped ? 'Включить раздел' : 'Исключить раздел';
+    }
 
     const questionsWrap = section.querySelector('.questions');
     if (questionsWrap) questionsWrap.style.display = skipped ? 'none' : '';
@@ -1653,7 +1570,7 @@ function applyDraftCommon(draft, fromLocal) {
         onAnswerChange(question, selectedAnswer);
       } else {
         const status = question.querySelector('[data-status="true"]');
-        question.classList.remove('answered', 'invalid');
+        question.classList.remove('answered');
         question.classList.add('unanswered');
         if (status) {
           status.className = 'status unanswered';
@@ -1661,23 +1578,18 @@ function applyDraftCommon(draft, fromLocal) {
         }
       }
 
-      // Каждый вопрос перед восстановлением получает один чистый контейнер.
       const photoList = question.querySelector('[data-photo-list="true"]');
       if (photoList) photoList.innerHTML = '';
       question._photos = [];
-
-      const seenPhotoIds = {};
       (savedQuestion.photos || []).forEach(function(photoMeta) {
-        const photoId = photoMeta && photoMeta.photoId ? String(photoMeta.photoId) : '';
-        if (!photoId || !photoList || seenPhotoIds[photoId]) return;
-        seenPhotoIds[photoId] = true;
-
-        const restorePromise = fromLocal
-          ? restoreLocalDraftPhoto(question, photoMeta, photoList, generation)
-          : restoreDraftPhoto(question, photoMeta, photoList, generation);
-        photoPromises.push(Promise.resolve(restorePromise).catch(function(error) {
-          console.warn('Не удалось восстановить фотографию:', error);
-        }));
+        if (photoMeta && photoMeta.photoId && photoList) {
+          photoPromises.push(
+            (fromLocal ? restoreLocalDraftPhoto(question, photoMeta, photoList) : restoreDraftPhoto(question, photoMeta, photoList))
+              .catch(function(error) {
+                console.warn('Не удалось восстановить фотографию:', error);
+              })
+          );
+        }
       });
     });
 
@@ -1687,16 +1599,22 @@ function applyDraftCommon(draft, fromLocal) {
   updateProgress();
 
   const finishRestore = function() {
-    // Если между стартом и завершением восстановления было запущено другое,
-    // старое восстановление не должно ничего менять в форме.
-    if (generation !== draftRestoreGeneration) return;
     restoringServerDraft = false;
-    draftRestoreInProgress = false;
     updateProgress();
+    // Для локального черновика ничего не отправляем обратно на сервер
+    // автоматически: локальная копия остаётся резервной, включая фото.
+    // Серверный черновик сохраняется прежним до следующего успешного
+    // онлайн-сохранения.
+    if (!fromLocal) {
+      saveDraftToServer();
+    }
   };
 
-  if (photoPromises.length) Promise.all(photoPromises).then(finishRestore).catch(finishRestore);
-  else finishRestore();
+  if (photoPromises.length) {
+    Promise.all(photoPromises).then(finishRestore).catch(finishRestore);
+  } else {
+    finishRestore();
+  }
 }
 
 function applyServerDraft(draft) {
@@ -1746,53 +1664,75 @@ function refreshDraftButtonState() {
 
 function continueDraftFromServer() {
   const button = document.getElementById('continueDraftButton');
-  if (!button || button.disabled || draftRestoreInProgress) return;
+  if (!button || button.disabled) return;
   button.disabled = true;
 
-  loadLocalDraft().then(function(localResult) {
-    if (!localResult || !localResult.exists || !localResult.draft) {
-      button.disabled = false;
-      button.dataset.hasDraft = 'false';
-      alert('Локальный черновик не найден на этом устройстве.');
+  const localPromise = loadLocalDraft();
+  const serverPromise = new Promise(function(resolve) {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      resolve({exists:false});
       return;
     }
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(function(error) {
+        console.warn('Серверный черновик недоступен:', error);
+        resolve({exists:false});
+      })
+      .loadAuditDraft();
+  });
 
-    const draft = localResult.draft;
-    if (!Array.isArray(draft.sections) || draft.sections.length === 0) {
-      button.disabled = false;
+  Promise.all([localPromise, serverPromise]).then(function(results) {
+    const newest = getNewestDraft(results[1], results[0]);
+    if (!newest) {
+      button.disabled = true;
       button.dataset.hasDraft = 'false';
       return;
     }
-
-    if (!draft.appData && APP_DATA) draft.appData = APP_DATA;
-    applyLocalDraft(draft);
-
-    const waitForRestore = function() {
-      if (draftRestoreInProgress) {
-        setTimeout(waitForRestore, 50);
-        return;
-      }
+    if (!Array.isArray(newest.draft.sections) || newest.draft.sections.length === 0) {
+      console.warn('Обнаружен черновик без разделов:', newest.draft);
       button.disabled = false;
       button.dataset.hasDraft = 'true';
-    };
-    waitForRestore();
-  }).catch(function(error) {
-    console.warn('Локальный черновик недоступен:', error);
+      return;
+    }
+
+    if (newest.source === 'local') {
+      if (!newest.draft.appData && APP_DATA) newest.draft.appData = APP_DATA;
+      applyLocalDraft(newest.draft);
+    } else {
+      applyServerDraft(newest.draft);
+    }
     button.disabled = false;
+    button.dataset.hasDraft = 'true';
   });
 }
 
 function startNewAudit() {
-  if (!confirm('Начать новый аудит?\n\nТекущие данные формы и локальный черновик будут удалены с этого устройства.')) return;
+  if (!confirm('Начать новый аудит?\n\nТекущие данные формы и сохранённый черновик будут удалены.')) return;
 
-  clearLocalDraft().then(function() {
+  clearLocalDraft();
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
     clearFormForNewAudit();
-    const button = document.getElementById('continueDraftButton');
-    if (button) {
-      button.disabled = true;
-      button.dataset.hasDraft = 'false';
-    }
-  });
+    const localButton = document.getElementById('continueDraftButton');
+    if (localButton) { localButton.disabled = true; localButton.dataset.hasDraft = 'false'; }
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function() {
+      clearFormForNewAudit();
+
+      const button = document.getElementById('continueDraftButton');
+      if (button) {
+        button.disabled = true;
+        button.dataset.hasDraft = 'false';
+      }
+    })
+    .withFailureHandler(function(error) {
+      alert('Не удалось удалить черновик:\n\n' + getErrorMessage(error));
+    })
+    .removeAuditDraft();
 }
 
 function clearFormForNewAudit() {
@@ -1857,11 +1797,6 @@ function clearFormForNewAudit() {
 }
 
 let totalQuestions = 0;
-let lastAppliedDraftKey = '';
-let lastAppliedDraftContentKey = '';
-let draftRestoreInProgress = false;
-let draftRestoreGeneration = 0;
-
 
 
 /* ==========================================================
@@ -1878,9 +1813,6 @@ document.addEventListener(
     if (continueButton) {
       continueButton.addEventListener('click', continueDraftFromServer);
     }
-
-    const submitButton = document.getElementById('submitButton');
-    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ АУДИТ';
 
     if (newButton) {
       newButton.addEventListener('click', startNewAudit);
@@ -2092,7 +2024,7 @@ function renderApp(data) {
       type="button"
       class="submit-button">
 
-      ВЫГРУЗИТЬ АУДИТ
+      Выгрузить отчёт
 
     </button>
 
@@ -2864,9 +2796,6 @@ function addPhotoPreview(
 
   item.className =
     'photo-item';
-
-  if (file._localPhotoId) item.dataset.photoId = String(file._localPhotoId);
-  else if (file._draftPhotoId) item.dataset.photoId = String(file._draftPhotoId);
 
   const img =
     document.createElement('img');
