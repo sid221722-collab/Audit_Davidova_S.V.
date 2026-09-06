@@ -1232,6 +1232,11 @@ function clearLocalStorageDraftAll() {
     localStorage.removeItem(LOCAL_DRAFT_CHUNK_COUNT_KEY);
   } catch (e) {}
   try { localStorage.removeItem(LOCAL_DRAFT_META_KEY); } catch (e) {}
+  try {
+    const photoIndex = readLocalPhotoIndex();
+    Object.keys(photoIndex).forEach(function(qid) { (photoIndex[qid] || []).forEach(function(p) { try { localStorage.removeItem('audit_local_photo_data_' + p.photoId); } catch (e) {} }); });
+    localStorage.removeItem(LOCAL_PHOTO_INDEX_KEY);
+  } catch (e) {}
   clearLocalDraftCookie();
 }
 
@@ -1310,12 +1315,13 @@ function requestPersistentStorage() {
   } catch (e) {}
 }
 
-function persistLocalPhoto(file) {
+function persistLocalPhoto(file, question) {
   if (!file) return Promise.resolve(false);
   if (!file._localPhotoId) {
     file._localPhotoId = 'local_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
   }
   const photoId = file._localPhotoId;
+  if (question) rememberLocalPhotoMeta(question, file);
   return fileToDataUrlForLocal(file).then(function(dataUrl) {
     const record = {
       photoId: photoId,
@@ -1324,17 +1330,18 @@ function persistLocalPhoto(file) {
       dataUrl: dataUrl,
       savedAt: new Date().toISOString()
     };
+    saveLocalPhotoToStorage(record);
     return Promise.all([
-      localDbPut(LOCAL_PHOTO_STORE, photoId, record),
-      savePhotoToCache(photoId, dataUrl, record.name, record.mimeType)
+      localDbPut(LOCAL_PHOTO_STORE, photoId, record).catch(function() { return false; }),
+      savePhotoToCache(photoId, dataUrl, record.name, record.mimeType).catch(function() { return false; })
     ]).then(function() {
-      // После фактического сохранения бинарного фото ещё раз сохраняем
-      // метаданные черновика, чтобы связь photoId -> фото гарантированно была.
+      // Метаданные фото фиксируем отдельно от большого снимка формы.
+      if (question) rememberLocalPhotoMeta(question, file);
       writeLocalDraftStorageSnapshot();
       return true;
     });
   }).catch(function(error) {
-    console.warn('Не удалось отдельно сохранить локальную фотографию:', error);
+    console.warn('Не удалось сохранить локальную фотографию:', error);
     return false;
   });
 }
@@ -1472,7 +1479,7 @@ function loadLocalDraft() {
     candidates.sort(function(a, b) {
       return new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime();
     });
-    return { exists: true, draft: candidates[0] };
+    return { exists: true, draft: mergeLocalPhotoIndexIntoDraft(candidates[0]) };
   });
 }
 
@@ -1480,6 +1487,9 @@ function loadLocalDraftPhoto(photoId) {
   return localDbGet(LOCAL_PHOTO_STORE, photoId).catch(function() { return null; }).then(function(result) {
     if (result && result.dataUrl) return result;
     return loadPhotoFromCache(photoId);
+  }).then(function(result) {
+    if (result && result.dataUrl) return result;
+    return loadLocalPhotoFromStorage(photoId);
   });
 }
 
@@ -1521,6 +1531,7 @@ function uploadDraftPhoto(question, file) {
 function deleteDraftPhoto(file) {
   if (!file || !file._localPhotoId) return;
   const photoId = file._localPhotoId;
+  forgetLocalPhotoMeta(file);
   file._localPhotoId = '';
   localDbDelete(LOCAL_PHOTO_STORE, photoId).catch(function(error) {
     console.warn('Не удалось удалить локальную фотографию:', error);
@@ -2835,7 +2846,7 @@ function addPhotos(
 
         // Фото пишется в локальные хранилища сразу, не дожидаясь таймера
         // автосохранения всего черновика.
-        persistLocalPhoto(file);
+        persistLocalPhoto(file, question);
         scheduleLocalDraftSave();
 
       }
@@ -3913,6 +3924,17 @@ if ('serviceWorker' in navigator) {
     var btn = document.getElementById('submitButton');
     if (btn) btn.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
   });
+</script>
+
+<script>
+(function(){
+  function fixExportButtonLabel(){
+    var btn = document.getElementById('submitBtn') || document.querySelector('button[data-submit-audit]');
+    if (btn) btn.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
+  }
+  document.addEventListener('DOMContentLoaded', fixExportButtonLabel);
+  setTimeout(fixExportButtonLabel, 500);
+})();
 </script>
 </body>
 </html>
