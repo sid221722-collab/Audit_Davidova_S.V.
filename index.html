@@ -3878,17 +3878,17 @@ async function submitForm() {
             'Файл отчёта:\n' +
             (result.reportName || '');
 
-          if (result.appendixPdfName) {
+          if (result.appendixDocxName || result.appendixPdfName) {
             successMessage +=
-              '\n\nПриложение PDF по нарушениям:\n' +
-              result.appendixPdfName +
+              '\n\nПриложение Word:\n' +
+              result.appendixDocxName || result.appendixPdfName +
               '\n' +
-              result.appendixPdfUrl;
+              result.appendixDocxUrl || result.appendixPdfUrl;
           }
 
           if (result.appendixPdfError) {
             successMessage +=
-              '\n\nPDF-приложение не создано:\n' +
+              '\n\nWord-приложение не создано:\n' +
               result.appendixPdfError;
           }
 
