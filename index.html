@@ -2356,11 +2356,7 @@ function renderApp(data) {
     <button
       id="submitButton"
       type="button"
-      class="submit-button">
-
-      ВЫГРУЗИТЬ ОТЧЁТ
-
-    </button>
+      class="submit-button">ВЫГРУЗИТЬ ОТЧЁТ</button>
 
   `;
 
@@ -3901,7 +3897,17 @@ async function submitForm() {
         return;
       }
       showLoading(true, 'Сохраняем проверку и фотографии...');
-      submitPayloadViaPost(url, payload);
+      submitPayloadViaPost(url, payload, function(result) {
+        showLoading(false);
+        button.disabled = false;
+        if (result && result.ok === false) {
+          alert('Ошибка сохранения:\n\n' + (result.error || 'Не удалось выгрузить отчёт.'));
+          return;
+        }
+        alert('Проверка успешно сохранена.\n\nФорма очищена.');
+        clearLocalDraft();
+        resetForm();
+      });
       return;
     }
 
@@ -3930,9 +3936,9 @@ async function submitForm() {
           if (result.appendixDocxName || result.appendixPdfName) {
             successMessage +=
               '\n\nПриложение Word:\n' +
-              result.appendixDocxName || result.appendixPdfName +
+              (result.appendixDocxName || result.appendixPdfName || '') +
               '\n' +
-              result.appendixDocxUrl || result.appendixPdfUrl;
+              (result.appendixDocxUrl || result.appendixPdfUrl || '');
           }
 
           if (result.appendixPdfError) {
@@ -4190,18 +4196,44 @@ function escapeHtml(
 </script>
 
 <script>
-function submitPayloadViaPost(url, payload) {
+function submitPayloadViaPost(url, payload, onDone) {
+  const frameName = 'auditUploadFrame_' + Date.now();
+  const iframe = document.createElement('iframe');
+  iframe.name = frameName;
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  let settled = false;
+  iframe.addEventListener('load', function() {
+    if (settled) return;
+    settled = true;
+    let result = {ok:true};
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      const text = doc && doc.body ? String(doc.body.textContent || '').trim() : '';
+      if (text) {
+        try { result = JSON.parse(text); } catch (e) {}
+      }
+    } catch (e) {}
+    setTimeout(function() {
+      try { iframe.remove(); } catch (e) {}
+      if (typeof onDone === 'function') onDone(result);
+    }, 100);
+  });
+
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = url;
-  form.target = '_self';
+  form.target = frameName;
   form.style.display = 'none';
+
   const input = document.createElement('textarea');
   input.name = 'payload';
   input.value = JSON.stringify(payload);
   form.appendChild(input);
   document.body.appendChild(form);
   form.submit();
+  setTimeout(function() { try { form.remove(); } catch (e) {} }, 500);
 }
 
 if ('serviceWorker' in navigator) {
