@@ -827,6 +827,36 @@ html, body, input, select, textarea {
 .submit-button { font-size: 35px !important; }
 </style>
 <style id="v62-submit-caption">#submitButton{font-size:35px !important;}</style>
+
+<style id="android-camera-v64">
+  .photo-camera-button { display:none !important; }
+  html.android-device .photo-camera-button {
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    min-height:50px !important;
+    padding:8px 14px !important;
+    margin:8px auto 0 !important;
+    border:1px solid #9aa0a6 !important;
+    border-radius:7px !important;
+    background:#fff !important;
+    color:#202124 !important;
+    font-size:20px !important;
+    font-weight:700 !important;
+    cursor:pointer !important;
+  }
+  html.android-device .photo-camera-button:active { transform:translateY(1px); }
+</style>
+<script>
+(function(){
+  try {
+    var ua = navigator.userAgent || '';
+    var isAndroid = /Android/i.test(ua) && !/iPhone|iPad|iPod/i.test(ua);
+    if (isAndroid) document.documentElement.classList.add('android-device');
+  } catch(e) {}
+})();
+</script>
+
 </head>
 
 
@@ -2979,6 +3009,36 @@ function createQuestion(
     'true';
 
 
+
+  // v64: отдельная кнопка камеры только для Android.
+  const cameraButton =
+    document.createElement(
+      'button'
+    );
+
+  cameraButton.type = 'button';
+  cameraButton.className = 'photo-camera-button';
+  cameraButton.textContent = 'Сделать фото';
+
+  const cameraInput =
+    document.createElement(
+      'input'
+    );
+
+  cameraInput.type = 'file';
+  cameraInput.accept = 'image/*';
+  cameraInput.capture = 'environment';
+  cameraInput.multiple = false;
+  cameraInput.style.display = 'none';
+
+  cameraButton.addEventListener('click', function() {
+    cameraInput.click();
+  });
+
+  cameraInput.addEventListener('change', function() {
+    addPhotos(question, cameraInput, photoList);
+  });
+
   const photoList =
     document.createElement(
       'div'
@@ -3011,6 +3071,14 @@ function createQuestion(
 
   photosArea.appendChild(
     fileInput
+  );
+
+  photosArea.appendChild(
+    cameraButton
+  );
+
+  photosArea.appendChild(
+    cameraInput
   );
 
   photosArea.appendChild(
