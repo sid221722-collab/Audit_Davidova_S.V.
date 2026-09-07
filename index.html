@@ -617,6 +617,10 @@ button.photo-delete,
 
 /* Четыре фото в один ряд без перекрытия.
    Размер самих иконок (.photo-item) не изменяем. */
+.photo-action-row{display:flex !important;align-items:center !important;justify-content:center !important;gap:12px !important;width:100% !important;margin-top:8px !important;}
+.photo-action-row .photo-input,.photo-action-row .photo-camera-button{width:calc(50% - 6px) !important;max-width:none !important;margin:0 !important;box-sizing:border-box !important;}
+.photo-action-row .photo-input{display:block !important;}
+.photo-action-row .photo-camera-button{min-height:50px !important;padding:10px 14px !important;border:1px solid #9aa0a6 !important;border-radius:7px !important;background:#fff !important;color:#202124 !important;font-size:20px !important;cursor:pointer !important;}
 .photo-list {
   display: flex !important;
   flex-wrap: nowrap !important;
@@ -3069,13 +3073,11 @@ function createQuestion(
     photosTitle
   );
 
-  photosArea.appendChild(
-    fileInput
-  );
-
-  photosArea.appendChild(
-    cameraButton
-  );
+  const photoActionRow = document.createElement('div');
+  photoActionRow.className = 'photo-action-row';
+  photoActionRow.appendChild(fileInput);
+  photoActionRow.appendChild(cameraButton);
+  photosArea.appendChild(photoActionRow);
 
   photosArea.appendChild(
     cameraInput
