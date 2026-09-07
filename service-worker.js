@@ -1,4 +1,4 @@
-const CACHE_NAME = 'audit-pwa-v64-row';
+const CACHE_NAME = 'audit-pwa-v62';
 const APP_SHELL = ['./', './index.html', './app-config.js', './manifest.webmanifest', './service-worker.js'];
 
 self.addEventListener('install', event => {
