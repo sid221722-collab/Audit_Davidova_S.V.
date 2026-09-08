@@ -2146,7 +2146,7 @@ document.addEventListener(
     }
 
     const submitButton = document.getElementById('submitButton');
-    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
+    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ АУДИТ';
 
     if (newButton) {
       newButton.addEventListener('click', startNewAudit);
@@ -2356,7 +2356,11 @@ function renderApp(data) {
     <button
       id="submitButton"
       type="button"
-      class="submit-button">ВЫГРУЗИТЬ ОТЧЁТ</button>
+      class="submit-button">
+
+      ВЫГРУЗИТЬ АУДИТ
+
+    </button>
 
   `;
 
@@ -2809,7 +2813,6 @@ function createQuestion(
     'Фотографии нарушения';
 
 
-  // Основной выбор нескольких фотографий.
   const fileInput =
     document.createElement(
       'input'
@@ -2829,35 +2832,6 @@ function createQuestion(
 
   fileInput.dataset.photos =
     'true';
-
-  // Отдельная кнопка камеры для Android/iPhone.
-  // Использует capture="environment", не меняя существующую
-  // логику хранения/добавления фотографий.
-  const cameraInput = document.createElement('input');
-  cameraInput.type = 'file';
-  cameraInput.accept = 'image/*';
-  cameraInput.capture = 'environment';
-  cameraInput.className = 'photo-camera-input';
-  cameraInput.dataset.photos = 'true';
-  cameraInput.style.display = 'none';
-
-  const cameraButton = document.createElement('button');
-  cameraButton.type = 'button';
-  cameraButton.className = 'photo-camera-button';
-  cameraButton.textContent = 'Сделать фото';
-  cameraButton.style.display = 'block';
-  cameraButton.style.margin = '0 auto 8px';
-  cameraButton.style.minHeight = '44px';
-  cameraButton.style.padding = '8px 16px';
-  cameraButton.style.fontSize = '20px';
-  cameraButton.style.fontWeight = '700';
-  cameraButton.style.border = '1px solid #9aa0a6';
-  cameraButton.style.borderRadius = '7px';
-  cameraButton.style.background = '#fff';
-  cameraButton.style.color = '#202124';
-  cameraButton.addEventListener('click', function() {
-    cameraInput.click();
-  });
 
 
   const photoList =
@@ -2885,28 +2859,9 @@ function createQuestion(
     }
   );
 
-  cameraInput.addEventListener(
-    'change',
-    function() {
-      addPhotos(
-        question,
-        cameraInput,
-        photoList
-      );
-    }
-  );
-
 
   photosArea.appendChild(
     photosTitle
-  );
-
-  photosArea.appendChild(
-    cameraButton
-  );
-
-  photosArea.appendChild(
-    cameraInput
   );
 
   photosArea.appendChild(
@@ -3897,17 +3852,7 @@ async function submitForm() {
         return;
       }
       showLoading(true, 'Сохраняем проверку и фотографии...');
-      submitPayloadViaPost(url, payload, function(result) {
-        showLoading(false);
-        button.disabled = false;
-        if (result && result.ok === false) {
-          alert('Ошибка сохранения:\n\n' + (result.error || 'Не удалось выгрузить отчёт.'));
-          return;
-        }
-        alert('Проверка успешно сохранена.\n\nФорма очищена.');
-        clearLocalDraft();
-        resetForm();
-      });
+      submitPayloadViaPost(url, payload);
       return;
     }
 
@@ -3933,17 +3878,17 @@ async function submitForm() {
             'Файл отчёта:\n' +
             (result.reportName || '');
 
-          if (result.appendixDocxName || result.appendixPdfName) {
+          if (result.appendixPdfName) {
             successMessage +=
-              '\n\nПриложение Word:\n' +
-              (result.appendixDocxName || result.appendixPdfName || '') +
+              '\n\nПриложение PDF по нарушениям:\n' +
+              result.appendixPdfName +
               '\n' +
-              (result.appendixDocxUrl || result.appendixPdfUrl || '');
+              result.appendixPdfUrl;
           }
 
           if (result.appendixPdfError) {
             successMessage +=
-              '\n\nWord-приложение не создано:\n' +
+              '\n\nPDF-приложение не создано:\n' +
               result.appendixPdfError;
           }
 
@@ -4196,44 +4141,18 @@ function escapeHtml(
 </script>
 
 <script>
-function submitPayloadViaPost(url, payload, onDone) {
-  const frameName = 'auditUploadFrame_' + Date.now();
-  const iframe = document.createElement('iframe');
-  iframe.name = frameName;
-  iframe.style.display = 'none';
-  document.body.appendChild(iframe);
-
-  let settled = false;
-  iframe.addEventListener('load', function() {
-    if (settled) return;
-    settled = true;
-    let result = {ok:true};
-    try {
-      const doc = iframe.contentDocument || iframe.contentWindow.document;
-      const text = doc && doc.body ? String(doc.body.textContent || '').trim() : '';
-      if (text) {
-        try { result = JSON.parse(text); } catch (e) {}
-      }
-    } catch (e) {}
-    setTimeout(function() {
-      try { iframe.remove(); } catch (e) {}
-      if (typeof onDone === 'function') onDone(result);
-    }, 100);
-  });
-
+function submitPayloadViaPost(url, payload) {
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = url;
-  form.target = frameName;
+  form.target = '_self';
   form.style.display = 'none';
-
   const input = document.createElement('textarea');
   input.name = 'payload';
   input.value = JSON.stringify(payload);
   form.appendChild(input);
   document.body.appendChild(form);
   form.submit();
-  setTimeout(function() { try { form.remove(); } catch (e) {} }, 500);
 }
 
 if ('serviceWorker' in navigator) {
@@ -4242,6 +4161,611 @@ if ('serviceWorker' in navigator) {
       .catch(function(e) { console.warn('Service Worker:', e); });
   });
 }
+</script>
+
+
+<!-- AUDIT UPLOAD V2 EXPERIMENTAL -->
+<script>
+(function() {
+  'use strict';
+
+  // ============================================================
+  // V2: отдельный локальный аудит + отдельные записи фотографий
+  // ============================================================
+  const V2_DB = 'audit_local_audits_v2';
+  const V2_AUDIT_STORE = 'audits';
+  const V2_PHOTO_STORE = 'photos';
+  const V2_ACTIVE_KEY = 'audit_active_id_v2';
+  const V2_META_KEY = 'audit_active_meta_v2';
+  const V2_SCHEMA = 2;
+  const V2_UPLOAD_VERSION = '2.0';
+  const V2_LEGACY_LOAD = window.loadLocalDraft;
+  const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
+
+  function v2Db() {
+    return new Promise(function(resolve, reject) {
+      const req = indexedDB.open(V2_DB, 1);
+      req.onupgradeneeded = function(e) {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(V2_AUDIT_STORE)) db.createObjectStore(V2_AUDIT_STORE);
+        if (!db.objectStoreNames.contains(V2_PHOTO_STORE)) db.createObjectStore(V2_PHOTO_STORE);
+      };
+      req.onsuccess = function() { resolve(req.result); };
+      req.onerror = function() { reject(req.error || new Error('Не удалось открыть локальное хранилище v2.')); };
+    });
+  }
+
+  function v2Put(store, key, value) {
+    return v2Db().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).put(value, key);
+        tx.oncomplete = function(){ db.close(); resolve(); };
+        tx.onerror = function(){ db.close(); reject(tx.error || new Error('Ошибка записи локальных данных.')); };
+      });
+    });
+  }
+
+  function v2Get(store, key) {
+    return v2Db().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        const req = db.transaction(store, 'readonly').objectStore(store).get(key);
+        req.onsuccess = function(){ resolve(req.result || null); };
+        req.onerror = function(){ reject(req.error || new Error('Ошибка чтения локальных данных.')); };
+      });
+    });
+  }
+
+  function v2Delete(store, key) {
+    return v2Db().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).delete(key);
+        tx.oncomplete = function(){ db.close(); resolve(); };
+        tx.onerror = function(){ db.close(); reject(tx.error || new Error('Ошибка удаления локальных данных.')); };
+      });
+    });
+  }
+
+  function v2ListPhotos(auditId) {
+    return v2Db().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        const result = [];
+        const req = db.transaction(V2_PHOTO_STORE, 'readonly').objectStore(V2_PHOTO_STORE).openCursor();
+        req.onsuccess = function(e) {
+          const cursor = e.target.result;
+          if (!cursor) { db.close(); resolve(result); return; }
+          const v = cursor.value;
+          if (v && v.auditId === auditId) result.push(v);
+          cursor.continue();
+        };
+        req.onerror = function(){ db.close(); reject(req.error || new Error('Не удалось получить список фото.')); };
+      });
+    });
+  }
+
+  function v2DeleteAuditPhotos(auditId) {
+    return v2Db().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        const tx = db.transaction(V2_PHOTO_STORE, 'readwrite');
+        const store = tx.objectStore(V2_PHOTO_STORE);
+        const req = store.openCursor();
+        req.onsuccess = function(e) {
+          const cursor = e.target.result;
+          if (!cursor) return;
+          if (cursor.value && cursor.value.auditId === auditId) cursor.delete();
+          cursor.continue();
+        };
+        tx.oncomplete = function(){ db.close(); resolve(); };
+        tx.onerror = function(){ db.close(); reject(tx.error || new Error('Не удалось очистить фотографии аудита.')); };
+      });
+    });
+  }
+
+  function v2MakeAuditId() {
+    const stamp = new Date().toISOString().replace(/[-:TZ.]/g,'').slice(0,14);
+    const rnd = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now()).replace(/-/g,'').slice(0,10);
+    return 'AUDIT_' + stamp + '_' + rnd;
+  }
+
+  function v2GetAuditId() {
+    let id = '';
+    try { id = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
+    if (!id) {
+      id = v2MakeAuditId();
+      try { localStorage.setItem(V2_ACTIVE_KEY, id); } catch(e) {}
+    }
+    return id;
+  }
+
+  function v2SetActive(auditId) {
+    try { localStorage.setItem(V2_ACTIVE_KEY, auditId || ''); } catch(e) {}
+  }
+
+  function v2SafePart(value) {
+    return String(value || '').trim().replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,'_').replace(/_+/g,'_').replace(/^_+|_+$/g,'') || 'без_названия';
+  }
+
+  function v2FolderName(objectName, auditDate) {
+    return 'Аудит_' + v2SafePart(objectName) + '_' + v2SafePart(auditDate);
+  }
+
+  function v2FileToBlobRecord(file, meta) {
+    return {
+      auditId: meta.auditId,
+      photoId: meta.photoId,
+      sectionIndex: String(meta.sectionIndex || ''),
+      questionId: String(meta.questionId || ''),
+      name: file.name || 'photo.jpg',
+      mimeType: file.type || 'image/jpeg',
+      blob: file,
+      createdAt: new Date().toISOString()
+    };
+  }
+
+  function v2MakePhotoId() {
+    return 'P_' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '_' + Math.random().toString(16).slice(2));
+  }
+
+  function v2ResizePhoto(file) {
+    if (!file || !/^image\//i.test(file.type || '')) return Promise.resolve(file);
+    return new Promise(function(resolve) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = function() {
+        try {
+          const maxSide = 1600;
+          const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+          const w = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+          const h = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(function(blob) {
+            URL.revokeObjectURL(url);
+            if (!blob) { resolve(file); return; }
+            const name = (file.name || 'photo.jpg').replace(/\.[^.]+$/, '') + '.jpg';
+            resolve(new File([blob], name, {type:'image/jpeg', lastModified:Date.now()}));
+          }, 'image/jpeg', 0.78);
+        } catch(e) { URL.revokeObjectURL(url); resolve(file); }
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
+  function v2Snapshot() {
+    const auditId = v2GetAuditId();
+    const objectName = (document.getElementById('objectName') || {}).value || '';
+    const auditDate = (document.getElementById('auditDate') || {}).value || '';
+    const sections = [];
+    document.querySelectorAll('.section').forEach(function(section) {
+      const sectionData = {
+        index: String(section.dataset.sectionIndex || ''),
+        name: (section.querySelector('.section-title') || {}).textContent || '',
+        skipped: section.classList.contains('section-skipped') || section.dataset.skipped === 'true',
+        responsible: ((section.querySelector('[data-responsible="true"]') || {}).value || ''),
+        questions: []
+      };
+      section.querySelectorAll('.question').forEach(function(question) {
+        const checked = question.querySelector('input[type="radio"]:checked');
+        const comment = question.querySelector('[data-comment="true"]');
+        const photos = (question._photos || []).map(function(file, idx) {
+          return {
+            photoId: file._auditPhotoId || file._localPhotoId || '',
+            name: file.name || 'photo.jpg',
+            mimeType: file.type || 'image/jpeg',
+            sectionIndex: String(section.dataset.sectionIndex || ''),
+            questionId: String(question.dataset.questionId || ''),
+            order: idx + 1
+          };
+        }).filter(function(p){ return !!p.photoId; });
+        sectionData.questions.push({
+          id: String(question.dataset.questionId || ''),
+          point: (question.querySelector('.question-title') || {}).textContent || '',
+          answer: checked ? checked.value : '',
+          comment: comment ? comment.value : '',
+          photos: photos
+        });
+      });
+      sections.push(sectionData);
+    });
+    return {
+      schema: V2_SCHEMA,
+      auditId: auditId,
+      folderName: v2FolderName(objectName, auditDate),
+      objectName: String(objectName).trim(),
+      auditDate: String(auditDate).trim(),
+      savedAt: new Date().toISOString(),
+      appData: APP_DATA || null,
+      sections: sections
+    };
+  }
+
+  function v2WriteAuditSnapshot() {
+    const snapshot = v2Snapshot();
+    v2SetActive(snapshot.auditId);
+    try {
+      localStorage.setItem(V2_META_KEY, JSON.stringify({
+        auditId: snapshot.auditId,
+        folderName: snapshot.folderName,
+        objectName: snapshot.objectName,
+        auditDate: snapshot.auditDate,
+        savedAt: snapshot.savedAt,
+        photoCount: snapshot.sections.reduce(function(n,s){
+          return n + (s.questions||[]).reduce(function(m,q){ return m + (q.photos||[]).length; },0);
+        },0)
+      }));
+    } catch(e) {}
+    return v2Put(V2_AUDIT_STORE, snapshot.auditId, snapshot).then(function(){ return snapshot; });
+  }
+
+  let v2SaveTimer = null;
+  function v2ScheduleSave() {
+    clearTimeout(v2SaveTimer);
+    v2SaveTimer = setTimeout(function(){ v2SaveCurrentAudit(); }, 250);
+  }
+  function v2SaveCurrentAudit() {
+    const snapshot = v2Snapshot();
+    return v2Put(V2_AUDIT_STORE, snapshot.auditId, snapshot).catch(function(e){ console.warn('V2 audit save',e); });
+  }
+
+  function v2LoadActiveAudit() {
+    let id = '';
+    try { id = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
+    if (!id) return Promise.resolve({exists:false});
+    return v2Get(V2_AUDIT_STORE, id).then(function(audit){
+      if (audit && audit.savedAt && Array.isArray(audit.sections)) return {exists:true, draft:audit};
+      return {exists:false};
+    }).catch(function(){ return {exists:false}; });
+  }
+
+  function v2LoadPhoto(photoId) {
+    return v2Get(V2_PHOTO_STORE, photoId).catch(function(){ return null; });
+  }
+
+  function v2RestorePhoto(question, photoMeta, photoList, generation) {
+    return v2LoadPhoto(photoMeta.photoId).then(function(record){
+      if (!record || !record.blob || (generation && generation !== (window.draftRestoreGeneration || generation))) return;
+      const file = record.blob instanceof File ? record.blob : new File([record.blob], record.name || photoMeta.name || 'photo.jpg', {type: record.mimeType || photoMeta.mimeType || 'image/jpeg'});
+      file._auditPhotoId = photoMeta.photoId;
+      file._localPhotoId = photoMeta.photoId;
+      if (!question._photos) question._photos = [];
+      question._photos.push(file);
+      if (photoList) window.addPhotoPreview(question, file, photoList);
+    });
+  }
+
+  // ============================================================
+  // Переопределяем сохранение: фото не входят в JSON черновика.
+  // ============================================================
+  window.buildDraftPayload = function(){ return v2Snapshot(); };
+
+  window.scheduleLocalDraftSave = function(){ v2ScheduleSave(); };
+  window.saveDraftToLocal = function(){
+    return v2SaveCurrentAudit();
+  };
+  window.saveDraftToServer = function(){ return Promise.resolve(); };
+  window.uploadDraftPhoto = function(){ v2ScheduleSave(); };
+
+  window.deleteDraftPhoto = function(file){
+    if (!file) return;
+    const id = file._auditPhotoId || file._localPhotoId;
+    if (id) v2Delete(V2_PHOTO_STORE, id).catch(function(){});
+    file._auditPhotoId = '';
+    file._localPhotoId = '';
+    v2ScheduleSave();
+  };
+
+  window.loadLocalDraftPhoto = v2LoadPhoto;
+
+  window.loadLocalDraft = function(){
+    return v2LoadActiveAudit().then(function(result){
+      if (result.exists) return result;
+      // Однократная миграция v61: сами ответы берём из старого снимка,
+      // фото — из старой локальной БД по их ID.
+      if (typeof V2_LEGACY_LOAD === 'function') {
+        return V2_LEGACY_LOAD().then(function(old){
+          if (!old || !old.exists || !old.draft) return {exists:false};
+          const d = old.draft;
+          const auditId = v2GetAuditId();
+          d.auditId = auditId;
+          d.schema = V2_SCHEMA;
+          d.folderName = v2FolderName(d.objectName, d.auditDate);
+          return v2Put(V2_AUDIT_STORE, auditId, d).then(function(){
+            return {exists:true, draft:d, migrated:true};
+          });
+        }).catch(function(){ return {exists:false}; });
+      }
+      return {exists:false};
+    });
+  };
+
+  window.clearLocalDraft = function(){
+    let auditId = '';
+    try { auditId = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
+    const clean = auditId ? Promise.all([v2Delete(V2_AUDIT_STORE, auditId), v2DeleteAuditPhotos(auditId)]) : Promise.resolve();
+    try { localStorage.removeItem(V2_ACTIVE_KEY); localStorage.removeItem(V2_META_KEY); } catch(e) {}
+    return clean.catch(function(){});
+  };
+
+  // ============================================================
+  // Добавление фото: сначала сжатие, затем немедленная запись Blob.
+  // ============================================================
+  window.addPhotos = function(question, input, list) {
+    if (!question._photos) question._photos = [];
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    const currentCount = question._photos.length;
+    const available = Math.max(0, APP_DATA.maxPhotos - currentCount);
+    if (available <= 0) {
+      alert('Достигнуто максимальное количество фотографий: ' + APP_DATA.maxPhotos);
+      input.value = '';
+      return;
+    }
+    const auditId = v2GetAuditId();
+    const section = question.closest('.section');
+    const sectionIndex = section ? String(section.dataset.sectionIndex || '') : '';
+    const questionId = String(question.dataset.questionId || '');
+
+    Promise.all(files.slice(0, available).map(function(srcFile){
+      return v2ResizePhoto(srcFile);
+    })).then(function(processed){
+      const jobs = processed.map(function(file){
+        const photoId = v2MakePhotoId();
+        file._auditPhotoId = photoId;
+        file._localPhotoId = photoId;
+        question._photos.push(file);
+        const meta = {auditId, sectionIndex, questionId, photoId};
+        return v2Put(V2_PHOTO_STORE, photoId, v2FileToBlobRecord(file, meta)).then(function(){
+          addPhotoPreview(question, file, list);
+        });
+      });
+      return Promise.all(jobs);
+    }).then(function(){
+      v2SaveCurrentAudit();
+    }).catch(function(error){
+      console.warn('Не удалось сохранить фотографии локально:', error);
+      alert('Не удалось сохранить одну или несколько фотографий локально. Попробуйте добавить их ещё раз.');
+    });
+    input.value = '';
+  };
+
+  // ============================================================
+  // Восстановление: последовательно, без Promise.all на все фото.
+  // ============================================================
+  window.applyDraftCommon = function(draft) {
+    if (!draft || window.draftRestoreInProgress) return;
+    const generation = ++window.draftRestoreGeneration;
+    window.draftRestoreInProgress = true;
+    v2SetActive(draft.auditId || v2GetAuditId());
+    const objectInput = document.getElementById('objectName');
+    const dateInput = document.getElementById('auditDate');
+    if (objectInput) objectInput.value = draft.objectName || '';
+    if (dateInput) dateInput.value = draft.auditDate || '';
+
+    const sectionsByIndex = {};
+    document.querySelectorAll('.section').forEach(function(section){ sectionsByIndex[String(section.dataset.sectionIndex||'')] = section; });
+
+    const allJobs = [];
+    (draft.sections || []).forEach(function(savedSection){
+      const section = sectionsByIndex[String(savedSection.index || '')];
+      if (!section) return;
+      const skipped = !!savedSection.skipped;
+      section.classList.toggle('section-skipped', skipped);
+      section.dataset.skipped = skipped ? 'true' : 'false';
+      const responsible = section.querySelector('[data-responsible="true"]');
+      if (responsible) responsible.value = savedSection.responsible || '';
+      const skipButton = section.querySelector('[data-section-skip="true"]');
+      if (skipButton) skipButton.textContent = skipped ? 'Включить раздел' : 'Исключить раздел';
+      const questionsWrap = section.querySelector('.questions');
+      if (questionsWrap) questionsWrap.style.display = skipped ? 'none' : '';
+      const questionsById = {};
+      section.querySelectorAll('.question').forEach(function(q){ questionsById[String(q.dataset.questionId||'')] = q; });
+      (savedSection.questions || []).forEach(function(savedQuestion){
+        const question = questionsById[String(savedQuestion.id||'')];
+        if (!question) return;
+        const radios = question.querySelectorAll('input[type="radio"]');
+        let selectedAnswer = '';
+        radios.forEach(function(r){ const checked = String(r.value) === String(savedQuestion.answer||''); r.checked = checked; if (checked) selectedAnswer = r.value; });
+        const comment = question.querySelector('[data-comment="true"]');
+        if (comment) comment.value = savedQuestion.comment || '';
+        if (selectedAnswer) onAnswerChange(question, selectedAnswer);
+        else {
+          const status = question.querySelector('[data-status="true"]');
+          question.classList.remove('answered','invalid'); question.classList.add('unanswered');
+          if (status){ status.className='status unanswered'; status.textContent='Не отвечено'; }
+        }
+        const photoList = question.querySelector('[data-photo-list="true"]');
+        question._photos = [];
+        if (photoList) photoList.innerHTML = '';
+        (savedQuestion.photos || []).forEach(function(photoMeta){
+          if (photoMeta && photoMeta.photoId && photoList) allJobs.push(function(){ return v2RestorePhoto(question, photoMeta, photoList, generation); });
+        });
+        updateSectionCompletion(section);
+      });
+    });
+    updateProgress();
+
+    let chain = Promise.resolve();
+    allJobs.forEach(function(job){
+      chain = chain.then(function(){
+        if (generation !== window.draftRestoreGeneration) return;
+        return job();
+      });
+    });
+    chain.then(function(){
+      window.draftRestoreInProgress = false;
+      window.draftAutoRestored = true;
+      window.updateProgress && window.updateProgress();
+    }).catch(function(error){
+      window.draftRestoreInProgress = false;
+      console.warn('Восстановление v2:', error);
+      window.updateProgress && window.updateProgress();
+    });
+  };
+
+  window.applyLocalDraft = function(draft){ window.applyDraftCommon(draft, true); };
+
+  window.refreshDraftButtonState = function(){
+    const button = document.getElementById('continueDraftButton');
+    if (!button) return;
+    loadLocalDraft().then(function(result){
+      button.disabled = !(result && result.exists);
+      button.dataset.hasDraft = (result && result.exists) ? 'true' : 'false';
+    });
+  };
+
+  window.continueDraftFromServer = function(){
+    const button = document.getElementById('continueDraftButton');
+    if (button) button.disabled = true;
+    loadLocalDraft().then(function(result){
+      if (!result || !result.exists) {
+        if (button) button.disabled = false;
+        alert('Локальный черновик не найден на этом устройстве.');
+        return;
+      }
+      applyLocalDraft(result.draft);
+      if (button) { button.disabled = false; button.dataset.hasDraft='true'; }
+    });
+  };
+
+  window.startNewAudit = function(){
+    if (!confirm('Начать новый аудит?\n\nТекущие данные и фотографии этого аудита будут удалены с устройства.')) return;
+    clearLocalDraft().then(function(){
+      if (typeof clearFormForNewAudit === 'function') clearFormForNewAudit();
+      const id = v2MakeAuditId();
+      v2SetActive(id);
+      const button = document.getElementById('continueDraftButton');
+      if (button) { button.disabled=true; button.dataset.hasDraft='false'; }
+    });
+  };
+
+  // ============================================================
+  // Новая выгрузка: JSON ответов отдельно, фото по одному.
+  // ============================================================
+  function v2Url() {
+    return ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || '').trim();
+  }
+
+  function v2PostBackground(url, payload) {
+    return fetch(url, {
+      method: 'POST',
+      mode: 'no-cors',
+      cache: 'no-store',
+      body: new URLSearchParams({payload: JSON.stringify(payload)})
+    }).catch(function(error){ throw error; });
+  }
+
+  function v2Base64FromBlob(blob) {
+    return new Promise(function(resolve, reject){
+      const reader = new FileReader();
+      reader.onload = function(){
+        const s = String(reader.result || '');
+        const comma = s.indexOf(',');
+        resolve(comma >= 0 ? s.slice(comma+1) : s);
+      };
+      reader.onerror = function(){ reject(reader.error || new Error('Не удалось прочитать фотографию.')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function v2CollectAllPhotoMeta(snapshot) {
+    const out=[];
+    (snapshot.sections||[]).forEach(function(section){
+      (section.questions||[]).forEach(function(q){
+        (q.photos||[]).forEach(function(p){
+          out.push({
+            photoId:p.photoId,
+            sectionIndex: String(section.index||p.sectionIndex||''),
+            questionId:String(q.id||p.questionId||''),
+            name:p.name||'photo.jpg',
+            mimeType:p.mimeType||'image/jpeg',
+            order:p.order||1
+          });
+        });
+      });
+    });
+    return out;
+  }
+
+  function v2FinalizeForm(url, snapshot, photoCount) {
+    const payload = {
+      action: 'uploadFinalize',
+      version: V2_UPLOAD_VERSION,
+      auditId: snapshot.auditId,
+      objectName: snapshot.objectName,
+      auditDate: snapshot.auditDate,
+      expectedPhotos: v2CollectAllPhotoMeta(snapshot),
+      sections: snapshot.sections
+    };
+    const form = document.createElement('form');
+    form.method='POST'; form.action=url; form.target='_self'; form.style.display='none';
+    const input=document.createElement('textarea'); input.name='payload'; input.value=JSON.stringify(payload); form.appendChild(input);
+    document.body.appendChild(form); form.submit();
+  }
+
+  window.submitForm = async function(){
+    if (!validateForm()) return;
+    const button=document.getElementById('submitButton');
+    button.disabled=true;
+    showLoading(true,'Подготавливаем локальный аудит...');
+    try {
+      const snapshot = await v2WriteAuditSnapshot();
+      const url = v2Url();
+      if (!url) throw new Error('Не задан URL Google Apps Script.');
+      if (!navigator.onLine) {
+        showLoading(false); button.disabled=false;
+        alert('Нет подключения к интернету. Аудит и фотографии сохранены на устройстве. Подключитесь к интернету и повторите выгрузку.');
+        return;
+      }
+      const metas = v2CollectAllPhotoMeta(snapshot);
+      for (let i=0;i<metas.length;i++) {
+        const meta=metas[i];
+        showLoading(true,'Выгружаем фотографии: ' + (i+1) + ' / ' + metas.length);
+        const record = await v2LoadPhoto(meta.photoId);
+        if (!record || !record.blob) throw new Error('Не найдена локальная фотография ' + meta.photoId + '.');
+        const data = await v2Base64FromBlob(record.blob);
+        let ok=false, lastErr=null;
+        for (let attempt=1; attempt<=3 && !ok; attempt++) {
+          try {
+            await v2PostBackground(url, {
+              action:'uploadPhoto',
+              version:V2_UPLOAD_VERSION,
+              auditId:snapshot.auditId,
+              objectName:snapshot.objectName,
+              auditDate:snapshot.auditDate,
+              photoId:meta.photoId,
+              sectionIndex:meta.sectionIndex,
+              questionId:meta.questionId,
+              order:meta.order,
+              name:meta.name,
+              mimeType:meta.mimeType,
+              data:data
+            });
+            ok=true;
+          } catch(e) { lastErr=e; await new Promise(function(r){setTimeout(r,600*attempt);}); }
+        }
+        if (!ok) throw lastErr || new Error('Не удалось выгрузить фото ' + meta.photoId);
+      }
+      showLoading(true, metas.length ? 'Фотографии загружены. Формируем отчёт...' : 'Формируем отчёт...');
+      v2FinalizeForm(url, snapshot, metas.length);
+    } catch(error) {
+      showLoading(false); button.disabled=false;
+      alert('Ошибка выгрузки:\n\n' + getErrorMessage(error) + '\n\nАудит и фотографии остались сохранены на устройстве.');
+    }
+  };
+
+  // При загрузке не удаляем старый рабочий v61 код автоматически.
+  // Новый слой использует только v2-хранилище для текущего активного аудита.
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      try { v2GetAuditId(); } catch(e) {}
+      refreshDraftButtonState();
+    }, 300);
+  });
+})();
 </script>
 
 </body>
