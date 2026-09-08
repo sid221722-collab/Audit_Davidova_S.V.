@@ -4178,7 +4178,8 @@ if ('serviceWorker' in navigator) {
   const V2_ACTIVE_KEY = 'audit_active_id_v2';
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
-  const V2_UPLOAD_VERSION = '2.0';
+  const V2_UPLOAD_VERSION = '2.1';
+  let v2RestoreGeneration = 0;
   const V2_LEGACY_LOAD = window.loadLocalDraft;
   const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
 
@@ -4298,7 +4299,7 @@ if ('serviceWorker' in navigator) {
       questionId: String(meta.questionId || ''),
       name: file.name || 'photo.jpg',
       mimeType: file.type || 'image/jpeg',
-      blob: file,
+      blob: (file && typeof file.slice === 'function') ? file.slice(0, file.size, file.type || 'image/jpeg') : file,
       createdAt: new Date().toISOString()
     };
   }
@@ -4427,7 +4428,7 @@ if ('serviceWorker' in navigator) {
 
   function v2RestorePhoto(question, photoMeta, photoList, generation) {
     return v2LoadPhoto(photoMeta.photoId).then(function(record){
-      if (!record || !record.blob || (generation && generation !== (window.draftRestoreGeneration || generation))) return;
+      if (!record || !record.blob || (generation && generation !== v2RestoreGeneration)) return;
       const file = record.blob instanceof File ? record.blob : new File([record.blob], record.name || photoMeta.name || 'photo.jpg', {type: record.mimeType || photoMeta.mimeType || 'image/jpeg'});
       file._auditPhotoId = photoMeta.photoId;
       file._localPhotoId = photoMeta.photoId;
@@ -4537,7 +4538,7 @@ if ('serviceWorker' in navigator) {
   // ============================================================
   window.applyDraftCommon = function(draft) {
     if (!draft || window.draftRestoreInProgress) return;
-    const generation = ++window.draftRestoreGeneration;
+    const generation = ++v2RestoreGeneration;
     window.draftRestoreInProgress = true;
     v2SetActive(draft.auditId || v2GetAuditId());
     const objectInput = document.getElementById('objectName');
@@ -4591,7 +4592,7 @@ if ('serviceWorker' in navigator) {
     let chain = Promise.resolve();
     allJobs.forEach(function(job){
       chain = chain.then(function(){
-        if (generation !== window.draftRestoreGeneration) return;
+        if (generation !== v2RestoreGeneration) return;
         return job();
       });
     });
