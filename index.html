@@ -4178,7 +4178,7 @@ if ('serviceWorker' in navigator) {
   const V2_ACTIVE_KEY = 'audit_active_id_v2';
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
-  const V2_UPLOAD_VERSION = '2.1';
+  const V2_UPLOAD_VERSION = '2.2';
   let v2RestoreGeneration = 0;
   const V2_LEGACY_LOAD = window.loadLocalDraft;
   const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
@@ -4724,7 +4724,7 @@ if ('serviceWorker' in navigator) {
       const metas = v2CollectAllPhotoMeta(snapshot);
       for (let i=0;i<metas.length;i++) {
         const meta=metas[i];
-        showLoading(true,'Выгружаем фотографии: ' + (i+1) + ' / ' + metas.length);
+        showLoading(true,'Выгружаем фотографии: ' + (i+1) + ' / ' + metas.length + ' — не закрывайте страницу');
         const record = await v2LoadPhoto(meta.photoId);
         if (!record || !record.blob) throw new Error('Не найдена локальная фотография ' + meta.photoId + '.');
         const data = await v2Base64FromBlob(record.blob);
@@ -4750,7 +4750,7 @@ if ('serviceWorker' in navigator) {
         }
         if (!ok) throw lastErr || new Error('Не удалось выгрузить фото ' + meta.photoId);
       }
-      showLoading(true, metas.length ? 'Фотографии загружены. Формируем отчёт...' : 'Формируем отчёт...');
+      showLoading(true, metas.length ? 'Фотографии загружены: ' + metas.length + ' / ' + metas.length + '. Формируем отчёт...' : 'Формируем отчёт...');
       v2FinalizeForm(url, snapshot, metas.length);
     } catch(error) {
       showLoading(false); button.disabled=false;
