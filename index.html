@@ -3134,15 +3134,14 @@ function addPhotoPreview(
   const img =
     document.createElement('img');
 
-  const reader =
-    new FileReader();
-
-  reader.onload =
-    function(e) {
-      img.src = e.target.result;
-    };
-
-  reader.readAsDataURL(file);
+  // Не переводим фото в base64 для превью: на Android это резко
+  // увеличивает расход RAM и при большом количестве фото может
+  // привести к падению вкладки. Используем временный Object URL.
+  const previewUrl = URL.createObjectURL(file);
+  img.src = previewUrl;
+  img.addEventListener('load', function(){
+    try { URL.revokeObjectURL(previewUrl); } catch(e) {}
+  }, {once:true});
 
   const name =
     document.createElement('div');
@@ -4178,7 +4177,7 @@ if ('serviceWorker' in navigator) {
   const V2_ACTIVE_KEY = 'audit_active_id_v2';
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
-  const V2_UPLOAD_VERSION = '2.2';
+  const V2_UPLOAD_VERSION = '2.3';
   let v2RestoreGeneration = 0;
   const V2_LEGACY_LOAD = window.loadLocalDraft;
   const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
@@ -4510,23 +4509,23 @@ if ('serviceWorker' in navigator) {
     const sectionIndex = section ? String(section.dataset.sectionIndex || '') : '';
     const questionId = String(question.dataset.questionId || '');
 
-    Promise.all(files.slice(0, available).map(function(srcFile){
-      return v2ResizePhoto(srcFile);
-    })).then(function(processed){
-      const jobs = processed.map(function(file){
+    // Обрабатываем фотографии строго по одной. Это не даёт одновременно
+    // держать в памяти несколько исходных файлов + canvas + JPEG + base64.
+    let processedCount = 0;
+    (async function(){
+      for (const srcFile of files.slice(0, available)) {
+        const file = await v2ResizePhoto(srcFile);
         const photoId = v2MakePhotoId();
         file._auditPhotoId = photoId;
         file._localPhotoId = photoId;
-        question._photos.push(file);
         const meta = {auditId, sectionIndex, questionId, photoId};
-        return v2Put(V2_PHOTO_STORE, photoId, v2FileToBlobRecord(file, meta)).then(function(){
-          addPhotoPreview(question, file, list);
-        });
-      });
-      return Promise.all(jobs);
-    }).then(function(){
-      v2SaveCurrentAudit();
-    }).catch(function(error){
+        await v2Put(V2_PHOTO_STORE, photoId, v2FileToBlobRecord(file, meta));
+        question._photos.push(file);
+        addPhotoPreview(question, file, list);
+        processedCount++;
+      }
+      await v2SaveCurrentAudit();
+    })().catch(function(error){
       console.warn('Не удалось сохранить фотографии локально:', error);
       alert('Не удалось сохранить одну или несколько фотографий локально. Попробуйте добавить их ещё раз.');
     });
@@ -4692,6 +4691,7 @@ if ('serviceWorker' in navigator) {
   }
 
   function v2FinalizeForm(url, snapshot, photoCount) {
+    showLoading(true, 'ШАГ 3 из 3 — сохраняем отчёт в Google Drive...');
     const payload = {
       action: 'uploadFinalize',
       version: V2_UPLOAD_VERSION,
@@ -4711,7 +4711,7 @@ if ('serviceWorker' in navigator) {
     if (!validateForm()) return;
     const button=document.getElementById('submitButton');
     button.disabled=true;
-    showLoading(true,'Подготавливаем локальный аудит...');
+    showLoading(true,'Подготовка: сохраняем данные аудита...');
     try {
       const snapshot = await v2WriteAuditSnapshot();
       const url = v2Url();
@@ -4724,7 +4724,7 @@ if ('serviceWorker' in navigator) {
       const metas = v2CollectAllPhotoMeta(snapshot);
       for (let i=0;i<metas.length;i++) {
         const meta=metas[i];
-        showLoading(true,'Выгружаем фотографии: ' + (i+1) + ' / ' + metas.length + ' — не закрывайте страницу');
+        showLoading(true,'ШАГ 1 из 3 — фотографии: ' + (i+1) + ' / ' + metas.length + ' — не закрывайте страницу');
         const record = await v2LoadPhoto(meta.photoId);
         if (!record || !record.blob) throw new Error('Не найдена локальная фотография ' + meta.photoId + '.');
         const data = await v2Base64FromBlob(record.blob);
@@ -4750,7 +4750,7 @@ if ('serviceWorker' in navigator) {
         }
         if (!ok) throw lastErr || new Error('Не удалось выгрузить фото ' + meta.photoId);
       }
-      showLoading(true, metas.length ? 'Фотографии загружены: ' + metas.length + ' / ' + metas.length + '. Формируем отчёт...' : 'Формируем отчёт...');
+      showLoading(true, metas.length ? 'ШАГ 2 из 3 — фотографии загружены: ' + metas.length + ' / ' + metas.length + '. Формируем отчёт...' : 'ШАГ 2 из 3 — формируем отчёт...');
       v2FinalizeForm(url, snapshot, metas.length);
     } catch(error) {
       showLoading(false); button.disabled=false;
