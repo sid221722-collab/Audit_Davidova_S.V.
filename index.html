@@ -2146,7 +2146,7 @@ document.addEventListener(
     }
 
     const submitButton = document.getElementById('submitButton');
-    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ АУДИТ';
+    if (submitButton) submitButton.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
 
     if (newButton) {
       newButton.addEventListener('click', startNewAudit);
@@ -2358,7 +2358,7 @@ function renderApp(data) {
       type="button"
       class="submit-button">
 
-      ВЫГРУЗИТЬ АУДИТ
+      ВЫГРУЗИТЬ ОТЧЁТ
 
     </button>
 
@@ -3134,14 +3134,13 @@ function addPhotoPreview(
   const img =
     document.createElement('img');
 
-  // Не переводим фото в base64 для превью: на Android это резко
-  // увеличивает расход RAM и при большом количестве фото может
-  // привести к падению вкладки. Используем временный Object URL.
+  // Не создаём base64-копию фотографии для превью: это сильно увеличивает
+  // расход оперативной памяти на Android при большом количестве фото.
   const previewUrl = URL.createObjectURL(file);
   img.src = previewUrl;
-  img.addEventListener('load', function(){
-    try { URL.revokeObjectURL(previewUrl); } catch(e) {}
-  }, {once:true});
+  img.addEventListener('load', function() {
+    try { URL.revokeObjectURL(previewUrl); } catch (e) {}
+  }, { once: true });
 
   const name =
     document.createElement('div');
@@ -4163,6 +4162,7 @@ if ('serviceWorker' in navigator) {
 </script>
 
 
+
 <!-- AUDIT UPLOAD V2 EXPERIMENTAL -->
 <script>
 (function() {
@@ -4177,7 +4177,7 @@ if ('serviceWorker' in navigator) {
   const V2_ACTIVE_KEY = 'audit_active_id_v2';
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
-  const V2_UPLOAD_VERSION = '2.3';
+  const V2_UPLOAD_VERSION = '2.2';
   let v2RestoreGeneration = 0;
   const V2_LEGACY_LOAD = window.loadLocalDraft;
   const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
@@ -4766,8 +4766,17 @@ if ('serviceWorker' in navigator) {
       refreshDraftButtonState();
     }, 300);
   });
+
+  // Сохраняем название кнопки рабочей версии v61.
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      const b = document.getElementById('submitButton');
+      if (b) b.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
+    }, 350);
+  });
 })();
 </script>
+
 
 </body>
 </html>
