@@ -2356,11 +2356,7 @@ function renderApp(data) {
     <button
       id="submitButton"
       type="button"
-      class="submit-button">
-
-      ВЫГРУЗИТЬ ОТЧЁТ
-
-    </button>
+      class="submit-button">ВЫГРУЗИТЬ ОТЧЁТ</button>
 
   `;
 
@@ -2813,6 +2809,7 @@ function createQuestion(
     'Фотографии нарушения';
 
 
+  // Основной выбор нескольких фотографий.
   const fileInput =
     document.createElement(
       'input'
@@ -2832,6 +2829,35 @@ function createQuestion(
 
   fileInput.dataset.photos =
     'true';
+
+  // Отдельная кнопка камеры для Android/iPhone.
+  // Использует capture="environment", не меняя существующую
+  // логику хранения/добавления фотографий.
+  const cameraInput = document.createElement('input');
+  cameraInput.type = 'file';
+  cameraInput.accept = 'image/*';
+  cameraInput.capture = 'environment';
+  cameraInput.className = 'photo-camera-input';
+  cameraInput.dataset.photos = 'true';
+  cameraInput.style.display = 'none';
+
+  const cameraButton = document.createElement('button');
+  cameraButton.type = 'button';
+  cameraButton.className = 'photo-camera-button';
+  cameraButton.textContent = 'Сделать фото';
+  cameraButton.style.display = 'block';
+  cameraButton.style.margin = '0 auto 8px';
+  cameraButton.style.minHeight = '44px';
+  cameraButton.style.padding = '8px 16px';
+  cameraButton.style.fontSize = '20px';
+  cameraButton.style.fontWeight = '700';
+  cameraButton.style.border = '1px solid #9aa0a6';
+  cameraButton.style.borderRadius = '7px';
+  cameraButton.style.background = '#fff';
+  cameraButton.style.color = '#202124';
+  cameraButton.addEventListener('click', function() {
+    cameraInput.click();
+  });
 
 
   const photoList =
@@ -2859,9 +2885,28 @@ function createQuestion(
     }
   );
 
+  cameraInput.addEventListener(
+    'change',
+    function() {
+      addPhotos(
+        question,
+        cameraInput,
+        photoList
+      );
+    }
+  );
+
 
   photosArea.appendChild(
     photosTitle
+  );
+
+  photosArea.appendChild(
+    cameraButton
+  );
+
+  photosArea.appendChild(
+    cameraInput
   );
 
   photosArea.appendChild(
@@ -3134,13 +3179,15 @@ function addPhotoPreview(
   const img =
     document.createElement('img');
 
-  // Не создаём base64-копию фотографии для превью: это сильно увеличивает
-  // расход оперативной памяти на Android при большом количестве фото.
-  const previewUrl = URL.createObjectURL(file);
-  img.src = previewUrl;
-  img.addEventListener('load', function() {
-    try { URL.revokeObjectURL(previewUrl); } catch (e) {}
-  }, { once: true });
+  const reader =
+    new FileReader();
+
+  reader.onload =
+    function(e) {
+      img.src = e.target.result;
+    };
+
+  reader.readAsDataURL(file);
 
   const name =
     document.createElement('div');
@@ -3850,7 +3897,17 @@ async function submitForm() {
         return;
       }
       showLoading(true, 'Сохраняем проверку и фотографии...');
-      submitPayloadViaPost(url, payload);
+      submitPayloadViaPost(url, payload, function(result) {
+        showLoading(false);
+        button.disabled = false;
+        if (result && result.ok === false) {
+          alert('Ошибка сохранения:\n\n' + (result.error || 'Не удалось выгрузить отчёт.'));
+          return;
+        }
+        alert('Проверка успешно сохранена.\n\nФорма очищена.');
+        clearLocalDraft();
+        resetForm();
+      });
       return;
     }
 
@@ -3876,17 +3933,17 @@ async function submitForm() {
             'Файл отчёта:\n' +
             (result.reportName || '');
 
-          if (result.appendixPdfName) {
+          if (result.appendixDocxName || result.appendixPdfName) {
             successMessage +=
-              '\n\nПриложение PDF по нарушениям:\n' +
-              result.appendixPdfName +
+              '\n\nПриложение Word:\n' +
+              (result.appendixDocxName || result.appendixPdfName || '') +
               '\n' +
-              result.appendixPdfUrl;
+              (result.appendixDocxUrl || result.appendixPdfUrl || '');
           }
 
           if (result.appendixPdfError) {
             successMessage +=
-              '\n\nPDF-приложение не создано:\n' +
+              '\n\nWord-приложение не создано:\n' +
               result.appendixPdfError;
           }
 
@@ -4139,18 +4196,44 @@ function escapeHtml(
 </script>
 
 <script>
-function submitPayloadViaPost(url, payload) {
+function submitPayloadViaPost(url, payload, onDone) {
+  const frameName = 'auditUploadFrame_' + Date.now();
+  const iframe = document.createElement('iframe');
+  iframe.name = frameName;
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  let settled = false;
+  iframe.addEventListener('load', function() {
+    if (settled) return;
+    settled = true;
+    let result = {ok:true};
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      const text = doc && doc.body ? String(doc.body.textContent || '').trim() : '';
+      if (text) {
+        try { result = JSON.parse(text); } catch (e) {}
+      }
+    } catch (e) {}
+    setTimeout(function() {
+      try { iframe.remove(); } catch (e) {}
+      if (typeof onDone === 'function') onDone(result);
+    }, 100);
+  });
+
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = url;
-  form.target = '_self';
+  form.target = frameName;
   form.style.display = 'none';
+
   const input = document.createElement('textarea');
   input.name = 'payload';
   input.value = JSON.stringify(payload);
   form.appendChild(input);
   document.body.appendChild(form);
   form.submit();
+  setTimeout(function() { try { form.remove(); } catch (e) {} }, 500);
 }
 
 if ('serviceWorker' in navigator) {
@@ -4776,6 +4859,7 @@ if ('serviceWorker' in navigator) {
   });
 })();
 </script>
+
 
 
 </body>
