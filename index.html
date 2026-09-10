@@ -4919,5 +4919,36 @@ if ('serviceWorker' in navigator) {
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
 })();
 </script>
+
+
+<script>
+/* ==========================================================
+   V2.5 — ПОДКЛЮЧАЕМ КНОПКУ ВЫГРУЗКИ К НОВОЙ ВЫГРУЗКЕ
+   Важно: исходный v65 создаёт addEventListener('click', submitForm)
+   во время загрузки страницы. Поэтому простая замена window.submitForm
+   не заменяет уже сохранённый обработчик. Здесь удаляем старый listener
+   клонированием кнопки и подключаем именно v2 window.submitForm.
+   ========================================================== */
+(function(){
+  function bindV25Submit(){
+    var oldBtn=document.getElementById('submitButton');
+    if(!oldBtn || typeof window.submitForm !== 'function') return false;
+    var newBtn=oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    newBtn.addEventListener('click', function(){
+      return window.submitForm();
+    });
+    return true;
+  }
+  if (!bindV25Submit()) {
+    var tries=0;
+    var timer=setInterval(function(){
+      tries++;
+      if(bindV25Submit() || tries>=20) clearInterval(timer);
+    },250);
+  }
+})();
+</script>
+
 </body>
 </html>
