@@ -4862,68 +4862,12 @@ if ('serviceWorker' in navigator) {
 
 
 
-<style id="photo-controls-final-v24">
-.photos-area .photo-controls-final-v24{display:flex!important;gap:8px!important;justify-content:center!important;align-items:center!important;flex-wrap:wrap!important;margin:0 0 8px!important}
-.photos-area .photo-controls-final-v24 button{display:block!important;min-height:50px!important;padding:9px 16px!important;border:1px solid #8d9399!important;border-radius:8px!important;background:#fff!important;color:#202124!important;font-size:20px!important;font-weight:700!important;cursor:pointer!important}
-.photos-area .photo-input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
-.photo-camera-input-v24{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
-</style>
-<script id="photo-controls-final-v24">
-(function(){
-  function ensurePhotoControls(root){
-    (root||document).querySelectorAll('.photos-area').forEach(function(area){
-      var fileInput=area.querySelector('input.photo-input[type="file"]');
-      if(!fileInput) return;
-      fileInput.classList.add('photo-input');
-      var controls=area.querySelector('.photo-controls-final-v24');
-      if(!controls){
-        controls=document.createElement('div');
-        controls.className='photo-controls-final-v24';
-        area.insertBefore(controls,fileInput);
-      }
-      var choose=controls.querySelector('[data-photo-choose-v24]');
-      if(!choose){
-        choose=document.createElement('button');
-        choose.type='button';
-        choose.textContent='Выбрать фото';
-        choose.setAttribute('data-photo-choose-v24','true');
-        choose.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();fileInput.click();});
-        controls.appendChild(choose);
-      }
-      var camera=area.querySelector('input.photo-camera-input[type="file"]');
-      if(!camera){
-        camera=document.createElement('input');
-        camera.type='file'; camera.accept='image/*'; camera.capture='environment';
-        camera.className='photo-camera-input photo-camera-input-v24';
-        camera.dataset.photos='true';
-        area.appendChild(camera);
-        camera.addEventListener('change',function(){
-          var list=area.querySelector('[data-photo-list="true"]');
-          if(typeof window.addPhotos==='function') window.addPhotos(area.closest('.question'),camera,list);
-        });
-      } else camera.classList.add('photo-camera-input-v24');
-      var take=controls.querySelector('[data-photo-camera-v24]');
-      if(!take){
-        take=document.createElement('button');
-        take.type='button'; take.textContent='Сделать фото';
-        take.setAttribute('data-photo-camera-v24','true');
-        take.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();camera.click();});
-        controls.appendChild(take);
-      }
-    });
-  }
-  function start(){ ensurePhotoControls(document); var obs=new MutationObserver(function(m){
-    var need=false; m.forEach(function(x){if(x.addedNodes&&x.addedNodes.length) need=true;});
-    if(need) ensurePhotoControls(document);
-  }); obs.observe(document.body,{childList:true,subtree:true}); }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start); else start();
-})();
-</script>
+
 
 
 <script>
 /* ==========================================================
-   V2.5 — ПОДКЛЮЧАЕМ КНОПКУ ВЫГРУЗКИ К НОВОЙ ВЫГРУЗКЕ
+   V2.6 — КНОПКИ ФОТО ИЗ V65, ВЫГРУЗКА V2.5 К НОВОЙ ВЫГРУЗКЕ
    Важно: исходный v65 создаёт addEventListener('click', submitForm)
    во время загрузки страницы. Поэтому простая замена window.submitForm
    не заменяет уже сохранённый обработчик. Здесь удаляем старый listener
