@@ -2199,22 +2199,14 @@ function loadApp() {
     google.script.run
       .withSuccessHandler(function(data) {
         renderApp(data);
-        loadLocalDraft().then(function(localResult) {
-          if (localResult && localResult.exists) {
-            setTimeout(function() { applyLocalDraft(localResult.draft); }, 50);
-          }
-          refreshDraftButtonState();
-        }).catch(function() { refreshDraftButtonState(); });
+        prepareFreshAuditSession();
+        refreshDraftButtonState();
       })
       .withFailureHandler(function(error) {
         if (cachedAppData && cachedAppData.sections) {
           renderApp(cachedAppData);
-          loadLocalDraft().then(function(localResult) {
-            if (localResult && localResult.exists) {
-              setTimeout(function() { applyLocalDraft(localResult.draft); }, 50);
-            }
-            refreshDraftButtonState();
-          }).catch(function() { refreshDraftButtonState(); });
+          prepareFreshAuditSession();
+          refreshDraftButtonState();
         } else {
           showFatalError(getErrorMessage(error) + '\n\nНет локальной копии формы для автономной работы.');
         }
@@ -2227,10 +2219,8 @@ function loadApp() {
   if (cachedAppData && cachedAppData.sections) {
     renderApp(cachedAppData);
     setTimeout(function() {
-      loadLocalDraft().then(function(localResult) {
-        if (localResult && localResult.exists) applyLocalDraft(localResult.draft);
-        refreshDraftButtonState();
-      }).catch(function() { refreshDraftButtonState(); });
+      prepareFreshAuditSession();
+      refreshDraftButtonState();
     }, 30);
     return;
   }
@@ -2248,7 +2238,7 @@ function loadApp() {
       return loadLocalDraft();
     })
     .then(function(localResult) {
-      if (localResult && localResult.exists) applyLocalDraft(localResult.draft);
+      prepareFreshAuditSession();
       refreshDraftButtonState();
     })
     .catch(function(err) {
@@ -4276,6 +4266,7 @@ if ('serviceWorker' in navigator) {
   const V2_AUDIT_STORE = 'audits';
   const V2_PHOTO_STORE = 'photos';
   const V2_ACTIVE_KEY = 'audit_active_id_v2';
+  const V2_LAST_DRAFT_KEY = 'audit_last_draft_id_v44';
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
   const V2_UPLOAD_VERSION = '2.2';
@@ -4529,6 +4520,20 @@ if ('serviceWorker' in navigator) {
     return v2Put(V2_AUDIT_STORE, snapshot.auditId, snapshot).catch(function(e){ console.warn('V2 audit save',e); });
   }
 
+  function prepareFreshAuditSession() {
+    let oldId = '';
+    try { oldId = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
+    if (oldId) {
+      try { localStorage.setItem(V2_LAST_DRAFT_KEY, oldId); } catch(e) {}
+    }
+    const freshId = v2MakeAuditId();
+    v2SetActive(freshId);
+  }
+
+  function getLastDraftId() {
+    try { return localStorage.getItem(V2_LAST_DRAFT_KEY) || ''; } catch(e) { return ''; }
+  }
+
   function v2LoadActiveAudit() {
     let id = '';
     try { id = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
@@ -4579,7 +4584,12 @@ if ('serviceWorker' in navigator) {
   window.loadLocalDraftPhoto = v2LoadPhoto;
 
   window.loadLocalDraft = function(){
-    return v2LoadActiveAudit().then(function(result){
+    const lastId = getLastDraftId();
+    const loadId = lastId || v2GetAuditId();
+    return (loadId ? v2Get(V2_AUDIT_STORE, loadId).then(function(audit){
+      if (audit && audit.savedAt && Array.isArray(audit.sections)) return {exists:true, draft:audit};
+      return {exists:false};
+    }).catch(function(){ return {exists:false}; }) : Promise.resolve({exists:false})).then(function(result){
       if (result.exists) return result;
       // Однократная миграция v61: сами ответы берём из старого снимка,
       // фото — из старой локальной БД по их ID.
@@ -4605,7 +4615,7 @@ if ('serviceWorker' in navigator) {
     let auditId = '';
     try { auditId = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
     const clean = auditId ? Promise.all([v2Delete(V2_AUDIT_STORE, auditId), v2DeleteAuditPhotos(auditId)]) : Promise.resolve();
-    try { localStorage.removeItem(V2_ACTIVE_KEY); localStorage.removeItem(V2_META_KEY); } catch(e) {}
+    try { localStorage.removeItem(V2_ACTIVE_KEY); localStorage.removeItem(V2_META_KEY); localStorage.removeItem(V2_LAST_DRAFT_KEY); } catch(e) {}
     return clean.catch(function(){});
   };
 
@@ -4746,6 +4756,7 @@ if ('serviceWorker' in navigator) {
         alert('Локальный черновик не найден на этом устройстве.');
         return;
       }
+      try { v2SetActive(result.draft.auditId || v2GetAuditId()); localStorage.removeItem(V2_LAST_DRAFT_KEY); } catch(e) {}
       applyLocalDraft(result.draft);
       if (button) { button.disabled = false; button.dataset.hasDraft='true'; }
     });
