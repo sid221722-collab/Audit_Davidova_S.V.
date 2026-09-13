@@ -4857,6 +4857,90 @@ if ('serviceWorker' in navigator) {
       if (b) b.textContent = 'ВЫГРУЗИТЬ ОТЧЁТ';
     }, 350);
   });
+
+/* ==========================================================
+   V2.8 — ПАКЕТНАЯ ВЫГРУЗКА ФОТОГРАФИЙ ПО 3 ШТУКИ
+   Интерфейс v65/v26 не изменяется.
+   ========================================================== */
+  var V28_BATCH_SIZE = 3;
+  var V28_UPLOAD_VERSION = '2.8';
+  function v28Url(){ return ((window.AUDIT_PWA_CONFIG && window.AUDIT_PWA_CONFIG.APPS_SCRIPT_URL) || '').trim(); }
+  function v28Post(url,payload){
+    return fetch(url,{method:'POST',mode:'no-cors',cache:'no-store',body:new URLSearchParams({payload:JSON.stringify(payload)})});
+  }
+  function v28Base64(blob){
+    return new Promise(function(resolve,reject){
+      var reader=new FileReader();
+      reader.onload=function(){var s=String(reader.result||''),c=s.indexOf(',');resolve(c>=0?s.slice(c+1):s);};
+      reader.onerror=function(){reject(reader.error||new Error('Не удалось прочитать фотографию.'));};
+      reader.readAsDataURL(blob);
+    });
+  }
+  function v28Metas(snapshot){
+    var out=[];
+    (snapshot.sections||[]).forEach(function(section){
+      (section.questions||[]).forEach(function(q){
+        (q.photos||[]).forEach(function(p){
+          if(!p || !p.photoId)return;
+          out.push({photoId:p.photoId,sectionIndex:String(section.index||p.sectionIndex||''),questionId:String(q.id||p.questionId||''),name:p.name||'photo.jpg',mimeType:p.mimeType||'image/jpeg',order:p.order||1});
+        });
+      });
+    });
+    return out;
+  }
+  window.submitFormV28 = async function(){
+    if(typeof validateForm==='function' && !validateForm()) return;
+    var button=document.getElementById('submitButton');
+    if(button)button.disabled=true;
+    try{
+      showLoading(true,'Сохранение проверки...\nШАГ 1 из 3 — подготовка фотографий');
+      var snapshot=await v2WriteAuditSnapshot();
+      var url=v28Url();
+      if(!url)throw new Error('Не задан URL Google Apps Script.');
+      if(!navigator.onLine){showLoading(false);if(button)button.disabled=false;alert('Нет подключения к интернету. Аудит и фотографии сохранены на устройстве. Подключитесь к интернету и повторите выгрузку.');return;}
+      var metas=v28Metas(snapshot), total=metas.length;
+      for(var start=0;start<total;start+=V28_BATCH_SIZE){
+        var batch=metas.slice(start,start+V28_BATCH_SIZE),photos=[];
+        showLoading(true,'Сохранение проверки...\nШАГ 1 из 3 — подготовка фото: '+start+' / '+total+' — не закрывайте страницу');
+        for(var j=0;j<batch.length;j++){
+          var meta=batch[j],rec=await v2LoadPhoto(meta.photoId);
+          if(!rec || !rec.blob)throw new Error('Не найдена локальная фотография '+meta.photoId+'.');
+          photos.push({photoId:meta.photoId,sectionIndex:meta.sectionIndex,questionId:meta.questionId,order:meta.order,name:meta.name,mimeType:meta.mimeType,data:await v28Base64(rec.blob)});
+        }
+        var lastErr=null,ok=false;
+        for(var attempt=1;attempt<=3 && !ok;attempt++){
+          try{await v28Post(url,{action:'uploadPhotoBatch',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,objectName:snapshot.objectName,auditDate:snapshot.auditDate,photos:photos});ok=true;}
+          catch(e){lastErr=e;await new Promise(function(r){setTimeout(r,800*attempt);});}
+        }
+        if(!ok)throw lastErr||new Error('Не удалось выгрузить пакет фотографий '+(start+1)+'–'+Math.min(start+V28_BATCH_SIZE,total)+'.');
+        photos=null;
+        showLoading(true,'Сохранение проверки...\nШАГ 1 из 3 — фотографии: '+Math.min(start+V28_BATCH_SIZE,total)+' / '+total+' — не закрывайте страницу');
+        await new Promise(function(r){setTimeout(r,120);});
+      }
+      showLoading(true,total?'Сохранение проверки...\nШАГ 2 из 3 — фотографии загружены: '+total+' / '+total+'. Формируем отчёт...':'Сохранение проверки...\nШАГ 2 из 3 — формируем отчёт...');
+      var payload={action:'uploadFinalize',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,objectName:snapshot.objectName,auditDate:snapshot.auditDate,expectedPhotos:metas,sections:snapshot.sections};
+      var form=document.createElement('form');form.method='POST';form.action=url;form.target='_self';form.style.display='none';
+      var input=document.createElement('textarea');input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();
+    }catch(error){showLoading(false);if(button)button.disabled=false;alert('Ошибка выгрузки:\n\n'+getErrorMessage(error)+'\n\nАудит и фотографии остались сохранены на устройстве.');}
+  };
+  // После определения v2-функции подключаем пакетную выгрузку к той же кнопке.
+  function bindV28Submit(){
+    var oldBtn=document.getElementById('submitButton');
+    if(!oldBtn)return false;
+    var newBtn=oldBtn.cloneNode(true);oldBtn.parentNode.replaceChild(newBtn,oldBtn);
+    newBtn.addEventListener('click',function(){return window.submitFormV28();});
+    newBtn.textContent='ВЫГРУЗИТЬ ОТЧЁТ';
+    return true;
+  }
+  // V2.6 ниже по файлу ещё раз привязывает кнопку. Поэтому V2.8
+  // подключается последним — после DOMContentLoaded.
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      if(!bindV28Submit()){
+        var v28tries=0,v28timer=setInterval(function(){v28tries++;if(bindV28Submit()||v28tries>=30)clearInterval(v28timer);},250);
+      }
+    },600);
+  });
 })();
 </script>
 
