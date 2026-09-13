@@ -589,20 +589,9 @@ input[type="text"], input[type="date"], textarea { font-size: 30px !important; }
     font-size: 15px;
   }
 }
-.header-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.header-title-row .header-title{margin:0}.draft-buttons{display:flex;align-items:center;gap:7px;justify-content:flex-end}.draft-button{min-height:44px;height:44px;padding:0 12px;border-radius:8px;font:700 14px Arial,Helvetica,sans-serif;cursor:pointer;box-sizing:border-box}.draft-continue{border:2px solid #188038;background:#e6f4ea;color:#137333}.draft-continue:disabled{border-color:#c7cdd4;background:#eef1f4;color:#8a929a;cursor:not-allowed;opacity:1}.draft-new{border:2px solid #9a5b00;background:#ffe0b2;color:#5a2700}.draft-button:active:not(:disabled){transform:translateY(1px)}@media(max-width:720px){.header-title-row{align-items:flex-start}.draft-buttons{flex-direction:column;align-items:stretch}.draft-button{width:150px;height:42px;min-height:42px;font-size:13px;padding:0 7px}}@media(max-width:390px){.draft-button{width:142px;font-size:12px}}</style>
-
-<style id="storage-choice-v43">
-.header-title-row{grid-template-columns:minmax(0,1fr) auto auto;display:grid;align-items:center;gap:10px}
-.storage-choice{display:flex;align-items:center;gap:6px;padding:5px 7px;border:1px solid #c7cdd4;border-radius:9px;background:#f8f9fa;white-space:nowrap}
-.storage-choice-title{font:700 12px Arial,Helvetica,sans-serif;color:#5f6368;margin-right:2px}
-.storage-choice label{display:flex;align-items:center;gap:4px;font:700 12px Arial,Helvetica,sans-serif;color:#30363b;cursor:pointer}
-.storage-choice input{width:16px;height:16px;margin:0;accent-color:#1769e0}
-@media(max-width:720px){
-  .header-title-row{grid-template-columns:1fr;align-items:stretch}
-  .storage-choice{justify-content:flex-start;flex-wrap:wrap;white-space:normal}
-  .storage-choice-title{width:100%;margin-right:0}
-}
-</style>
+.header-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.storage-choice{margin:0 0 10px;padding:8px 10px;border:1px solid #c7cdd4;border-radius:9px;background:#f8f9fa}.storage-choice-title{font-size:13px;font-weight:700;margin-bottom:6px}.storage-choice-options{display:flex;gap:8px;flex-wrap:wrap}.storage-choice-option{display:flex;align-items:center;gap:6px;min-height:40px;padding:6px 10px;border:2px solid #aeb6bf;border-radius:8px;background:#fff;font-size:14px;font-weight:700;cursor:pointer}.storage-choice-option input{width:20px;height:20px;margin:0}.storage-choice-option:has(input:checked){border-color:#1769e0;background:#e8f0fe;color:#174ea6}@media(max-width:600px){.storage-choice{margin-bottom:8px}.storage-choice-option{font-size:13px;min-height:42px}}
+.header-title-row .header-title{margin:0}.draft-buttons{display:flex;align-items:center;gap:7px;justify-content:flex-end}.draft-button{min-height:44px;height:44px;padding:0 12px;border-radius:8px;font:700 14px Arial,Helvetica,sans-serif;cursor:pointer;box-sizing:border-box}.draft-continue{border:2px solid #188038;background:#e6f4ea;color:#137333}.draft-continue:disabled{border-color:#c7cdd4;background:#eef1f4;color:#8a929a;cursor:not-allowed;opacity:1}.draft-new{border:2px solid #9a5b00;background:#ffe0b2;color:#5a2700}.draft-button:active:not(:disabled){transform:translateY(1px)}@media(max-width:720px){.header-title-row{align-items:flex-start}.draft-buttons{flex-direction:column;align-items:stretch}.draft-button{width:150px;height:42px;min-height:42px;font-size:13px;padding:0 7px}}@media(max-width:390px){.draft-button{width:142px;font-size:12px}}</style>
 
 <style id="photo-delete-font-fix">
 .photo-delete,
@@ -852,11 +841,14 @@ html, body, input, select, textarea {
 
     <div class="header-title-row">
       <div id="formTitle" class="header-title">АУДИТ ПО ПИЩЕВОЙ БЕЗОПАСНОСТИ</div>
-      <div class="storage-choice" aria-label="Куда отправлять отчётные документы">
-        <span class="storage-choice-title">Отправлять документы:</span>
-        <label><input type="radio" name="auditStorageMode" value="SCRIPT_ACCOUNT"> Основной аккаунт</label>
-        <label><input type="radio" name="auditStorageMode" value="SECOND_ACCOUNT" checked> Второй аккаунт</label>
+      <div id="storageChoice" class="storage-choice">
+        <div class="storage-choice-title">Отправлять документы:</div>
+        <div class="storage-choice-options">
+          <label class="storage-choice-option"><input type="radio" name="storageMode" value="SCRIPT_ACCOUNT"> Основной аккаунт</label>
+          <label class="storage-choice-option"><input type="radio" name="storageMode" value="SECOND_ACCOUNT" checked> Второй аккаунт</label>
+        </div>
       </div>
+
       <div class="draft-buttons">
         <button id="continueDraftButton" type="button" class="draft-button draft-continue" disabled>Продолжить черновик</button>
         <button id="newAuditButton" type="button" class="draft-button draft-new">Начать новый аудит</button>
@@ -2199,14 +2191,16 @@ function loadApp() {
     google.script.run
       .withSuccessHandler(function(data) {
         renderApp(data);
-        prepareFreshAuditSession();
-        refreshDraftButtonState();
+        loadLocalDraft().then(function() {
+          refreshDraftButtonState();
+        }).catch(function() { refreshDraftButtonState(); });
       })
       .withFailureHandler(function(error) {
         if (cachedAppData && cachedAppData.sections) {
           renderApp(cachedAppData);
-          prepareFreshAuditSession();
-          refreshDraftButtonState();
+          loadLocalDraft().then(function(localResult) {
+            refreshDraftButtonState();
+          }).catch(function() { refreshDraftButtonState(); });
         } else {
           showFatalError(getErrorMessage(error) + '\n\nНет локальной копии формы для автономной работы.');
         }
@@ -2219,8 +2213,9 @@ function loadApp() {
   if (cachedAppData && cachedAppData.sections) {
     renderApp(cachedAppData);
     setTimeout(function() {
-      prepareFreshAuditSession();
-      refreshDraftButtonState();
+      loadLocalDraft().then(function(localResult) {
+        refreshDraftButtonState();
+      }).catch(function() { refreshDraftButtonState(); });
     }, 30);
     return;
   }
@@ -2237,8 +2232,7 @@ function loadApp() {
       renderApp(data);
       return loadLocalDraft();
     })
-    .then(function(localResult) {
-      prepareFreshAuditSession();
+    .then(function() {
       refreshDraftButtonState();
     })
     .catch(function(err) {
@@ -4266,25 +4260,10 @@ if ('serviceWorker' in navigator) {
   const V2_AUDIT_STORE = 'audits';
   const V2_PHOTO_STORE = 'photos';
   const V2_ACTIVE_KEY = 'audit_active_id_v2';
-  const V2_LAST_DRAFT_KEY = 'audit_last_draft_id_v44';
+  const V2_PREVIOUS_KEY = 'audit_previous_id_v2';
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
   const V2_UPLOAD_VERSION = '2.2';
-  const V2_DEFAULT_STORAGE_MODE = 'SECOND_ACCOUNT';
-
-  function v2GetStorageMode() {
-    const checked = document.querySelector('input[name=\"auditStorageMode\"]:checked');
-    return checked && checked.value === 'SCRIPT_ACCOUNT' ? 'SCRIPT_ACCOUNT' : 'SECOND_ACCOUNT';
-  }
-
-  function v2SetStorageMode(mode) {
-    const value = String(mode || V2_DEFAULT_STORAGE_MODE).toUpperCase() === 'SCRIPT_ACCOUNT' ? 'SCRIPT_ACCOUNT' : 'SECOND_ACCOUNT';
-    document.querySelectorAll('input[name=\"auditStorageMode\"]').forEach(function(input){ input.checked = input.value === value; });
-  }
-
-  document.querySelectorAll('input[name=\"auditStorageMode\"]').forEach(function(input){
-    input.addEventListener('change', function(){ v2ScheduleSave(); });
-  });
   let v2RestoreGeneration = 0;
   const V2_LEGACY_LOAD = window.loadLocalDraft;
   const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
@@ -4446,6 +4425,8 @@ if ('serviceWorker' in navigator) {
     const auditId = v2GetAuditId();
     const objectName = (document.getElementById('objectName') || {}).value || '';
     const auditDate = (document.getElementById('auditDate') || {}).value || '';
+    const storageModeEl = document.querySelector('input[name="storageMode"]:checked');
+    const storageMode = storageModeEl ? storageModeEl.value : 'SECOND_ACCOUNT';
     const sections = [];
     document.querySelectorAll('.section').forEach(function(section) {
       const sectionData = {
@@ -4481,10 +4462,10 @@ if ('serviceWorker' in navigator) {
     return {
       schema: V2_SCHEMA,
       auditId: auditId,
-      storageMode: v2GetStorageMode(),
       folderName: v2FolderName(objectName, auditDate),
       objectName: String(objectName).trim(),
       auditDate: String(auditDate).trim(),
+      storageMode: storageMode,
       savedAt: new Date().toISOString(),
       appData: APP_DATA || null,
       sections: sections
@@ -4497,7 +4478,6 @@ if ('serviceWorker' in navigator) {
     try {
       localStorage.setItem(V2_META_KEY, JSON.stringify({
         auditId: snapshot.auditId,
-        storageMode: snapshot.storageMode || V2_DEFAULT_STORAGE_MODE,
         folderName: snapshot.folderName,
         objectName: snapshot.objectName,
         auditDate: snapshot.auditDate,
@@ -4520,21 +4500,28 @@ if ('serviceWorker' in navigator) {
     return v2Put(V2_AUDIT_STORE, snapshot.auditId, snapshot).catch(function(e){ console.warn('V2 audit save',e); });
   }
 
-  function prepareFreshAuditSession() {
+  function v2LoadAuditById(auditId) {
+    const id = String(auditId || '').trim();
+    if (!id) return Promise.resolve({exists:false});
+    return v2Get(V2_AUDIT_STORE, id).then(function(audit){
+      if (audit && audit.savedAt && Array.isArray(audit.sections)) return {exists:true, draft:audit};
+      return {exists:false};
+    }).catch(function(){ return {exists:false}; });
+  }
+
+  function v2PrepareFreshSession() {
     let oldId = '';
     try { oldId = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
     if (oldId) {
-      try { localStorage.setItem(V2_LAST_DRAFT_KEY, oldId); } catch(e) {}
+      try { localStorage.setItem(V2_PREVIOUS_KEY, oldId); } catch(e) {}
     }
-    const freshId = v2MakeAuditId();
-    v2SetActive(freshId);
+    const newId = v2MakeAuditId();
+    v2SetActive(newId);
+    try { localStorage.removeItem(V2_META_KEY); } catch(e) {}
+    return newId;
   }
 
-  function getLastDraftId() {
-    try { return localStorage.getItem(V2_LAST_DRAFT_KEY) || ''; } catch(e) { return ''; }
-  }
-
-  function v2LoadActiveAudit() {
+function v2LoadActiveAudit() {
     let id = '';
     try { id = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
     if (!id) return Promise.resolve({exists:false});
@@ -4584,12 +4571,7 @@ if ('serviceWorker' in navigator) {
   window.loadLocalDraftPhoto = v2LoadPhoto;
 
   window.loadLocalDraft = function(){
-    const lastId = getLastDraftId();
-    const loadId = lastId || v2GetAuditId();
-    return (loadId ? v2Get(V2_AUDIT_STORE, loadId).then(function(audit){
-      if (audit && audit.savedAt && Array.isArray(audit.sections)) return {exists:true, draft:audit};
-      return {exists:false};
-    }).catch(function(){ return {exists:false}; }) : Promise.resolve({exists:false})).then(function(result){
+    return v2LoadActiveAudit().then(function(result){
       if (result.exists) return result;
       // Однократная миграция v61: сами ответы берём из старого снимка,
       // фото — из старой локальной БД по их ID.
@@ -4600,7 +4582,6 @@ if ('serviceWorker' in navigator) {
           const auditId = v2GetAuditId();
           d.auditId = auditId;
           d.schema = V2_SCHEMA;
-          d.storageMode = d.storageMode || V2_DEFAULT_STORAGE_MODE;
           d.folderName = v2FolderName(d.objectName, d.auditDate);
           return v2Put(V2_AUDIT_STORE, auditId, d).then(function(){
             return {exists:true, draft:d, migrated:true};
@@ -4615,7 +4596,7 @@ if ('serviceWorker' in navigator) {
     let auditId = '';
     try { auditId = localStorage.getItem(V2_ACTIVE_KEY) || ''; } catch(e) {}
     const clean = auditId ? Promise.all([v2Delete(V2_AUDIT_STORE, auditId), v2DeleteAuditPhotos(auditId)]) : Promise.resolve();
-    try { localStorage.removeItem(V2_ACTIVE_KEY); localStorage.removeItem(V2_META_KEY); localStorage.removeItem(V2_LAST_DRAFT_KEY); } catch(e) {}
+    try { localStorage.removeItem(V2_ACTIVE_KEY); localStorage.removeItem(V2_META_KEY); } catch(e) {}
     return clean.catch(function(){});
   };
 
@@ -4673,7 +4654,8 @@ if ('serviceWorker' in navigator) {
     const dateInput = document.getElementById('auditDate');
     if (objectInput) objectInput.value = draft.objectName || '';
     if (dateInput) dateInput.value = draft.auditDate || '';
-    v2SetStorageMode(draft.storageMode || V2_DEFAULT_STORAGE_MODE);
+    const storageRadio = document.querySelector('input[name="storageMode"][value="' + (draft.storageMode || 'SECOND_ACCOUNT') + '"]');
+    if (storageRadio) storageRadio.checked = true;
 
     const sectionsByIndex = {};
     document.querySelectorAll('.section').forEach(function(section){ sectionsByIndex[String(section.dataset.sectionIndex||'')] = section; });
@@ -4741,7 +4723,9 @@ if ('serviceWorker' in navigator) {
   window.refreshDraftButtonState = function(){
     const button = document.getElementById('continueDraftButton');
     if (!button) return;
-    loadLocalDraft().then(function(result){
+    let previousId='';
+    try { previousId=localStorage.getItem(V2_PREVIOUS_KEY)||''; } catch(e) {}
+    v2LoadAuditById(previousId).then(function(result){
       button.disabled = !(result && result.exists);
       button.dataset.hasDraft = (result && result.exists) ? 'true' : 'false';
     });
@@ -4750,15 +4734,21 @@ if ('serviceWorker' in navigator) {
   window.continueDraftFromServer = function(){
     const button = document.getElementById('continueDraftButton');
     if (button) button.disabled = true;
-    loadLocalDraft().then(function(result){
-      if (!result || !result.exists) {
+    let previousId='';
+    try { previousId=localStorage.getItem(V2_PREVIOUS_KEY)||''; } catch(e) {}
+    v2LoadAuditById(previousId).then(function(result){
+      if (!result || !result.exists || !result.draft) {
         if (button) button.disabled = false;
         alert('Локальный черновик не найден на этом устройстве.');
         return;
       }
-      try { v2SetActive(result.draft.auditId || v2GetAuditId()); localStorage.removeItem(V2_LAST_DRAFT_KEY); } catch(e) {}
+      v2SetActive(result.draft.auditId || previousId);
+      try { localStorage.removeItem(V2_PREVIOUS_KEY); } catch(e) {}
       applyLocalDraft(result.draft);
-      if (button) { button.disabled = false; button.dataset.hasDraft='true'; }
+      if (button) { button.disabled = false; button.dataset.hasDraft='false'; }
+    }).catch(function(error){
+      console.warn('Локальный черновик недоступен:', error);
+      if (button) button.disabled = false;
     });
   };
 
@@ -4822,14 +4812,14 @@ if ('serviceWorker' in navigator) {
   }
 
   function v2FinalizeForm(url, snapshot, photoCount) {
-    showLoading(true, 'ШАГ 3 из 3 — сохраняем отчётные документы...');
+    showLoading(true, 'ШАГ 3 из 3 — сохраняем отчёт в Google Drive...');
     const payload = {
       action: 'uploadFinalize',
       version: V2_UPLOAD_VERSION,
       auditId: snapshot.auditId,
-      storageMode: snapshot.storageMode || V2_DEFAULT_STORAGE_MODE,
       objectName: snapshot.objectName,
       auditDate: snapshot.auditDate,
+      storageMode: snapshot.storageMode || 'SECOND_ACCOUNT',
       expectedPhotos: v2CollectAllPhotoMeta(snapshot),
       sections: snapshot.sections
     };
@@ -4867,7 +4857,6 @@ if ('serviceWorker' in navigator) {
               action:'uploadPhoto',
               version:V2_UPLOAD_VERSION,
               auditId:snapshot.auditId,
-              storageMode:snapshot.storageMode || V2_DEFAULT_STORAGE_MODE,
               objectName:snapshot.objectName,
               auditDate:snapshot.auditDate,
               photoId:meta.photoId,
@@ -4895,7 +4884,9 @@ if ('serviceWorker' in navigator) {
   // Новый слой использует только v2-хранилище для текущего активного аудита.
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){
-      try { v2GetAuditId(); } catch(e) {}
+      try { v2PrepareFreshSession(); } catch(e) {}
+      const second = document.querySelector('input[name="storageMode"][value="SECOND_ACCOUNT"]');
+      if (second) second.checked = true;
       refreshDraftButtonState();
     }, 300);
   });
@@ -4959,7 +4950,7 @@ if ('serviceWorker' in navigator) {
         }
         var lastErr=null,ok=false;
         for(var attempt=1;attempt<=3 && !ok;attempt++){
-          try{await v28Post(url,{action:'uploadPhotoBatch',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,storageMode:snapshot.storageMode||V2_DEFAULT_STORAGE_MODE,objectName:snapshot.objectName,auditDate:snapshot.auditDate,photos:photos});ok=true;}
+          try{await v28Post(url,{action:'uploadPhotoBatch',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,objectName:snapshot.objectName,auditDate:snapshot.auditDate,photos:photos});ok=true;}
           catch(e){lastErr=e;await new Promise(function(r){setTimeout(r,800*attempt);});}
         }
         if(!ok)throw lastErr||new Error('Не удалось выгрузить пакет фотографий '+(start+1)+'–'+Math.min(start+V28_BATCH_SIZE,total)+'.');
@@ -4968,7 +4959,7 @@ if ('serviceWorker' in navigator) {
         await new Promise(function(r){setTimeout(r,120);});
       }
       showLoading(true,total?'Сохранение проверки...\nШАГ 2 из 3 — фотографии загружены: '+total+' / '+total+'. Формируем отчёт...':'Сохранение проверки...\nШАГ 2 из 3 — формируем отчёт...');
-      var payload={action:'uploadFinalize',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,storageMode:snapshot.storageMode||V2_DEFAULT_STORAGE_MODE,objectName:snapshot.objectName,auditDate:snapshot.auditDate,expectedPhotos:metas,sections:snapshot.sections};
+      var payload={action:'uploadFinalize',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,objectName:snapshot.objectName,auditDate:snapshot.auditDate,expectedPhotos:metas,sections:snapshot.sections};
       var form=document.createElement('form');form.method='POST';form.action=url;form.target='_self';form.style.display='none';
       var input=document.createElement('textarea');input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();
     }catch(error){showLoading(false);if(button)button.disabled=false;alert('Ошибка выгрузки:\n\n'+getErrorMessage(error)+'\n\nАудит и фотографии остались сохранены на устройстве.');}
