@@ -1,4 +1,4 @@
-const CACHE_NAME = 'audit-pwa-v28';
+const CACHE_NAME = 'audit-pwa-v45';
 const APP_SHELL = ['./', './index.html', './app-config.js', './manifest.webmanifest', './service-worker.js'];
 
 self.addEventListener('install', event => {
@@ -14,6 +14,16 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
+
+  // Не перехватываем внешние запросы, в частности Google Apps Script.
+  // Иначе старый Service Worker может закэшировать ответ JSONP
+  // и на телефоне форма будет зависать на первом запуске.
+  try {
+    if (new URL(req.url).origin !== self.location.origin) return;
+  } catch (e) {
+    return;
+  }
+
   event.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;

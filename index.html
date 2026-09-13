@@ -2379,7 +2379,8 @@ function renderApp(data) {
 
   updateProgress();
 
-  setTimeout(restoreServerDraft, 0);
+  // Старый аудит не восстанавливаем автоматически.
+  // Он открывается только по кнопке «Продолжить черновик».
 
 }
 
