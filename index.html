@@ -591,6 +591,19 @@ input[type="text"], input[type="date"], textarea { font-size: 30px !important; }
 }
 .header-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}.header-title-row .header-title{margin:0}.draft-buttons{display:flex;align-items:center;gap:7px;justify-content:flex-end}.draft-button{min-height:44px;height:44px;padding:0 12px;border-radius:8px;font:700 14px Arial,Helvetica,sans-serif;cursor:pointer;box-sizing:border-box}.draft-continue{border:2px solid #188038;background:#e6f4ea;color:#137333}.draft-continue:disabled{border-color:#c7cdd4;background:#eef1f4;color:#8a929a;cursor:not-allowed;opacity:1}.draft-new{border:2px solid #9a5b00;background:#ffe0b2;color:#5a2700}.draft-button:active:not(:disabled){transform:translateY(1px)}@media(max-width:720px){.header-title-row{align-items:flex-start}.draft-buttons{flex-direction:column;align-items:stretch}.draft-button{width:150px;height:42px;min-height:42px;font-size:13px;padding:0 7px}}@media(max-width:390px){.draft-button{width:142px;font-size:12px}}</style>
 
+<style id="storage-choice-v43">
+.header-title-row{grid-template-columns:minmax(0,1fr) auto auto;display:grid;align-items:center;gap:10px}
+.storage-choice{display:flex;align-items:center;gap:6px;padding:5px 7px;border:1px solid #c7cdd4;border-radius:9px;background:#f8f9fa;white-space:nowrap}
+.storage-choice-title{font:700 12px Arial,Helvetica,sans-serif;color:#5f6368;margin-right:2px}
+.storage-choice label{display:flex;align-items:center;gap:4px;font:700 12px Arial,Helvetica,sans-serif;color:#30363b;cursor:pointer}
+.storage-choice input{width:16px;height:16px;margin:0;accent-color:#1769e0}
+@media(max-width:720px){
+  .header-title-row{grid-template-columns:1fr;align-items:stretch}
+  .storage-choice{justify-content:flex-start;flex-wrap:wrap;white-space:normal}
+  .storage-choice-title{width:100%;margin-right:0}
+}
+</style>
+
 <style id="photo-delete-font-fix">
 .photo-delete,
 button.photo-delete,
@@ -839,6 +852,11 @@ html, body, input, select, textarea {
 
     <div class="header-title-row">
       <div id="formTitle" class="header-title">АУДИТ ПО ПИЩЕВОЙ БЕЗОПАСНОСТИ</div>
+      <div class="storage-choice" aria-label="Куда отправлять отчётные документы">
+        <span class="storage-choice-title">Отправлять документы:</span>
+        <label><input type="radio" name="auditStorageMode" value="SCRIPT_ACCOUNT"> Основной аккаунт</label>
+        <label><input type="radio" name="auditStorageMode" value="SECOND_ACCOUNT" checked> Второй аккаунт</label>
+      </div>
       <div class="draft-buttons">
         <button id="continueDraftButton" type="button" class="draft-button draft-continue" disabled>Продолжить черновик</button>
         <button id="newAuditButton" type="button" class="draft-button draft-new">Начать новый аудит</button>
@@ -4261,6 +4279,21 @@ if ('serviceWorker' in navigator) {
   const V2_META_KEY = 'audit_active_meta_v2';
   const V2_SCHEMA = 2;
   const V2_UPLOAD_VERSION = '2.2';
+  const V2_DEFAULT_STORAGE_MODE = 'SECOND_ACCOUNT';
+
+  function v2GetStorageMode() {
+    const checked = document.querySelector('input[name=\"auditStorageMode\"]:checked');
+    return checked && checked.value === 'SCRIPT_ACCOUNT' ? 'SCRIPT_ACCOUNT' : 'SECOND_ACCOUNT';
+  }
+
+  function v2SetStorageMode(mode) {
+    const value = String(mode || V2_DEFAULT_STORAGE_MODE).toUpperCase() === 'SCRIPT_ACCOUNT' ? 'SCRIPT_ACCOUNT' : 'SECOND_ACCOUNT';
+    document.querySelectorAll('input[name=\"auditStorageMode\"]').forEach(function(input){ input.checked = input.value === value; });
+  }
+
+  document.querySelectorAll('input[name=\"auditStorageMode\"]').forEach(function(input){
+    input.addEventListener('change', function(){ v2ScheduleSave(); });
+  });
   let v2RestoreGeneration = 0;
   const V2_LEGACY_LOAD = window.loadLocalDraft;
   const V2_LEGACY_LOAD_PHOTO = window.loadLocalDraftPhoto;
@@ -4457,6 +4490,7 @@ if ('serviceWorker' in navigator) {
     return {
       schema: V2_SCHEMA,
       auditId: auditId,
+      storageMode: v2GetStorageMode(),
       folderName: v2FolderName(objectName, auditDate),
       objectName: String(objectName).trim(),
       auditDate: String(auditDate).trim(),
@@ -4472,6 +4506,7 @@ if ('serviceWorker' in navigator) {
     try {
       localStorage.setItem(V2_META_KEY, JSON.stringify({
         auditId: snapshot.auditId,
+        storageMode: snapshot.storageMode || V2_DEFAULT_STORAGE_MODE,
         folderName: snapshot.folderName,
         objectName: snapshot.objectName,
         auditDate: snapshot.auditDate,
@@ -4555,6 +4590,7 @@ if ('serviceWorker' in navigator) {
           const auditId = v2GetAuditId();
           d.auditId = auditId;
           d.schema = V2_SCHEMA;
+          d.storageMode = d.storageMode || V2_DEFAULT_STORAGE_MODE;
           d.folderName = v2FolderName(d.objectName, d.auditDate);
           return v2Put(V2_AUDIT_STORE, auditId, d).then(function(){
             return {exists:true, draft:d, migrated:true};
@@ -4627,6 +4663,7 @@ if ('serviceWorker' in navigator) {
     const dateInput = document.getElementById('auditDate');
     if (objectInput) objectInput.value = draft.objectName || '';
     if (dateInput) dateInput.value = draft.auditDate || '';
+    v2SetStorageMode(draft.storageMode || V2_DEFAULT_STORAGE_MODE);
 
     const sectionsByIndex = {};
     document.querySelectorAll('.section').forEach(function(section){ sectionsByIndex[String(section.dataset.sectionIndex||'')] = section; });
@@ -4774,11 +4811,12 @@ if ('serviceWorker' in navigator) {
   }
 
   function v2FinalizeForm(url, snapshot, photoCount) {
-    showLoading(true, 'ШАГ 3 из 3 — сохраняем отчёт в Google Drive...');
+    showLoading(true, 'ШАГ 3 из 3 — сохраняем отчётные документы...');
     const payload = {
       action: 'uploadFinalize',
       version: V2_UPLOAD_VERSION,
       auditId: snapshot.auditId,
+      storageMode: snapshot.storageMode || V2_DEFAULT_STORAGE_MODE,
       objectName: snapshot.objectName,
       auditDate: snapshot.auditDate,
       expectedPhotos: v2CollectAllPhotoMeta(snapshot),
@@ -4818,6 +4856,7 @@ if ('serviceWorker' in navigator) {
               action:'uploadPhoto',
               version:V2_UPLOAD_VERSION,
               auditId:snapshot.auditId,
+              storageMode:snapshot.storageMode || V2_DEFAULT_STORAGE_MODE,
               objectName:snapshot.objectName,
               auditDate:snapshot.auditDate,
               photoId:meta.photoId,
@@ -4909,7 +4948,7 @@ if ('serviceWorker' in navigator) {
         }
         var lastErr=null,ok=false;
         for(var attempt=1;attempt<=3 && !ok;attempt++){
-          try{await v28Post(url,{action:'uploadPhotoBatch',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,objectName:snapshot.objectName,auditDate:snapshot.auditDate,photos:photos});ok=true;}
+          try{await v28Post(url,{action:'uploadPhotoBatch',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,storageMode:snapshot.storageMode||V2_DEFAULT_STORAGE_MODE,objectName:snapshot.objectName,auditDate:snapshot.auditDate,photos:photos});ok=true;}
           catch(e){lastErr=e;await new Promise(function(r){setTimeout(r,800*attempt);});}
         }
         if(!ok)throw lastErr||new Error('Не удалось выгрузить пакет фотографий '+(start+1)+'–'+Math.min(start+V28_BATCH_SIZE,total)+'.');
@@ -4918,7 +4957,7 @@ if ('serviceWorker' in navigator) {
         await new Promise(function(r){setTimeout(r,120);});
       }
       showLoading(true,total?'Сохранение проверки...\nШАГ 2 из 3 — фотографии загружены: '+total+' / '+total+'. Формируем отчёт...':'Сохранение проверки...\nШАГ 2 из 3 — формируем отчёт...');
-      var payload={action:'uploadFinalize',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,objectName:snapshot.objectName,auditDate:snapshot.auditDate,expectedPhotos:metas,sections:snapshot.sections};
+      var payload={action:'uploadFinalize',version:V28_UPLOAD_VERSION,auditId:snapshot.auditId,storageMode:snapshot.storageMode||V2_DEFAULT_STORAGE_MODE,objectName:snapshot.objectName,auditDate:snapshot.auditDate,expectedPhotos:metas,sections:snapshot.sections};
       var form=document.createElement('form');form.method='POST';form.action=url;form.target='_self';form.style.display='none';
       var input=document.createElement('textarea');input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();
     }catch(error){showLoading(false);if(button)button.disabled=false;alert('Ошибка выгрузки:\n\n'+getErrorMessage(error)+'\n\nАудит и фотографии остались сохранены на устройстве.');}
