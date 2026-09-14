@@ -1047,6 +1047,86 @@ html, body, input, select, textarea {
 
 </style>
 
+<style id="draft-header-layout-v4-final">
+/* V4: точная компоновка верхней панели под мобильный viewport=900.
+   Этот блок расположен последним и перекрывает старые конфликтующие mobile-правила. */
+.header-tools-v2 {
+  grid-template-columns: 320px minmax(0, 1fr) !important;
+  grid-template-rows: 86px 62px !important;
+  column-gap: 10px !important;
+  row-gap: 8px !important;
+}
+.header-tools-v2 > .header-title {
+  font-size: 26px !important;
+  line-height: 1.06 !important;
+  text-align: center !important;
+  white-space: normal !important;
+}
+.header-tools-v2 .draft-buttons-top {
+  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  gap: 7px !important;
+}
+.header-tools-v2 .draft-button {
+  min-width: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 5px 6px !important;
+  gap: 4px !important;
+  font-size: 17px !important;
+  line-height: 1.08 !important;
+  border-radius: 10px !important;
+  white-space: normal !important;
+  overflow: hidden !important;
+}
+.header-tools-v2 .draft-icon {
+  width: 24px !important;
+  height: 30px !important;
+  font-size: 29px !important;
+  flex: 0 0 24px !important;
+}
+.header-tools-v2 .draft-button-text {
+  min-width: 0 !important;
+  max-width: calc(100% - 28px) !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+.header-tools-v2 .storage-choice {
+  padding: 0 !important;
+  gap: 5px !important;
+  grid-template-columns: auto minmax(0,1fr) !important;
+}
+.header-tools-v2 .storage-choice-title {
+  font-size: 19px !important;
+}
+.header-tools-v2 .storage-choice-options {
+  gap: 5px !important;
+}
+.header-tools-v2 .storage-choice-option {
+  height: 52px !important;
+  min-height: 52px !important;
+  padding: 3px 5px !important;
+  font-size: 18px !important;
+}
+.header-tools-v2 .storage-choice-option input {
+  width: 20px !important;
+  height: 20px !important;
+}
+.header-tools-v2 .draft-new-wide {
+  font-size: 21px !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+.header-tools-v2 .draft-new-wide .draft-button-text {
+  max-width: none !important;
+}
+.header-tools-v2 .draft-new-wide .draft-plus {
+  width: 34px !important;
+  flex-basis: 34px !important;
+  font-size: 40px !important;
+}
+</style>
+
 </head>
 
 

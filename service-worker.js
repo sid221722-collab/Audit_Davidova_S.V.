@@ -1,4 +1,4 @@
-const CACHE_NAME = 'audit-pwa-v45';
+const CACHE_NAME = 'audit-pwa-v47';
 const APP_SHELL = ['./', './index.html', './app-config.js', './manifest.webmanifest', './service-worker.js'];
 
 self.addEventListener('install', event => {
@@ -15,15 +15,28 @@ self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  // Не перехватываем внешние запросы, в частности Google Apps Script.
-  // Иначе старый Service Worker может закэшировать ответ JSONP
-  // и на телефоне форма будет зависать на первом запуске.
+  let url;
   try {
-    if (new URL(req.url).origin !== self.location.origin) return;
+    url = new URL(req.url);
+    if (url.origin !== self.location.origin) return;
   } catch (e) {
     return;
   }
 
+  // Для самой страницы используем network-first: при наличии интернета
+  // новая версия интерфейса появляется сразу, а офлайн остаётся fallback из кэша.
+  if (req.mode === 'navigate' || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/')) {
+    event.respondWith(
+      fetch(req).then(resp => {
+        const copy = resp.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, copy)).catch(() => {});
+        return resp;
+      }).catch(() => caches.match(req).then(cached => cached || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Остальные локальные ресурсы — cache-first для полноценной офлайн-работы.
   event.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;
