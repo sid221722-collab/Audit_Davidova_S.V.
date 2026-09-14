@@ -852,6 +852,9 @@ html, body, input, select, textarea {
       <div class="draft-buttons">
         <button id="continueDraftButton" type="button" class="draft-button draft-continue" disabled>Продолжить черновик</button>
         <button id="newAuditButton" type="button" class="draft-button draft-new">Начать новый аудит</button>
+        <button id="exportAuditFileButton" type="button" class="draft-button">Сохранить черновик в файл</button>
+        <button id="importAuditFileButton" type="button" class="draft-button">Загрузить черновик из файла</button>
+        <input id="importAuditFileInput" type="file" accept=".audit,application/json" style="display:none">
       </div>
     </div>
 
@@ -4501,6 +4504,183 @@ if ('serviceWorker' in navigator) {
     return v2Put(V2_AUDIT_STORE, snapshot.auditId, snapshot).catch(function(e){ console.warn('V2 audit save',e); });
   }
 
+  // ============================================================
+  // ПЕРЕНОСИМЫЙ ФАЙЛ ЧЕРНОВИКА .AUDIT
+  // Формат не зависит от сети: audit.json + фотографии в base64
+  // упакованы в один JSON-файл с расширением .audit.
+  // ============================================================
+  const AUDIT_FILE_FORMAT = 'audit-pwa-draft';
+  const AUDIT_FILE_VERSION = 1;
+
+  function auditFileSafeName(value) {
+    return String(value || 'аудит')
+      .replace(/[\\/:*?"<>|]+/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'аудит';
+  }
+
+  function auditBlobToBase64(blob) {
+    return new Promise(function(resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function() {
+        try {
+          const result = String(reader.result || '');
+          const comma = result.indexOf(',');
+          resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        } catch (e) { reject(e); }
+      };
+      reader.onerror = function() { reject(reader.error || new Error('Не удалось прочитать фотографию.')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  function auditBase64ToBlob(base64, mimeType) {
+    const binary = atob(String(base64 || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], {type: mimeType || 'image/jpeg'});
+  }
+
+  async function exportAuditFile() {
+    const button = document.getElementById('exportAuditFileButton');
+    if (button) button.disabled = true;
+    try {
+      showLoading(true, 'Подготовка файла черновика...');
+      const snapshot = await v2WriteAuditSnapshot();
+      const records = await v2ListPhotos(snapshot.auditId);
+      const photos = [];
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        if (!record || !record.blob) continue;
+        showLoading(true, 'Подготовка файла черновика...\nФото: ' + (i + 1) + ' из ' + records.length);
+        photos.push({
+          photoId: record.photoId,
+          sectionIndex: String(record.sectionIndex || ''),
+          questionId: String(record.questionId || ''),
+          name: record.name || 'photo.jpg',
+          mimeType: record.mimeType || record.blob.type || 'image/jpeg',
+          createdAt: record.createdAt || '',
+          data: await auditBlobToBase64(record.blob)
+        });
+      }
+      const pack = {
+        format: AUDIT_FILE_FORMAT,
+        version: AUDIT_FILE_VERSION,
+        exportedAt: new Date().toISOString(),
+        audit: snapshot,
+        photos: photos
+      };
+      const json = JSON.stringify(pack);
+      const blob = new Blob([json], {type: 'application/json;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = auditFileSafeName(snapshot.folderName || snapshot.objectName || 'аудит') + '.audit';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+      showLoading(false);
+      alert('Черновик сохранён в файл. Исходный черновик на этом устройстве не удалён.');
+    } catch (error) {
+      showLoading(false);
+      alert('Не удалось сохранить черновик в файл:\n\n' + getErrorMessage(error));
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  function readAuditPackageFile(file) {
+    return new Promise(function(resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function() {
+        try { resolve(JSON.parse(String(reader.result || ''))); }
+        catch (e) { reject(new Error('Файл черновика повреждён или имеет неверный формат.')); }
+      };
+      reader.onerror = function() { reject(reader.error || new Error('Не удалось прочитать файл черновика.')); };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
+  async function importAuditFile(file) {
+    if (!file) return;
+    const input = document.getElementById('importAuditFileInput');
+    try {
+      const pack = await readAuditPackageFile(file);
+      if (!pack || pack.format !== AUDIT_FILE_FORMAT || Number(pack.version) !== AUDIT_FILE_VERSION || !pack.audit) {
+        throw new Error('Это не файл черновика текущего формата.');
+      }
+      const draft = pack.audit;
+      if (!draft.auditId || !Array.isArray(draft.sections) || !draft.sections.length) {
+        throw new Error('В файле отсутствуют данные аудита.');
+      }
+      const photos = Array.isArray(pack.photos) ? pack.photos : [];
+      const current = await v2LoadActiveAudit();
+      if (current && current.exists && current.draft && current.draft.auditId !== draft.auditId) {
+        if (!confirm('Загрузить этот черновик?\n\nТекущий аудит на этом устройстве останется сохранённым, а загруженный станет активным.')) return;
+        try { localStorage.setItem(V2_PREVIOUS_KEY, current.draft.auditId); } catch (e) {}
+      }
+      showLoading(true, 'Загрузка черновика...\nСохраняем данные и фотографии');
+      v2SetActive(draft.auditId);
+      if (!draft.appData && APP_DATA) draft.appData = APP_DATA;
+      await v2Put(V2_AUDIT_STORE, draft.auditId, draft);
+      await v2DeleteAuditPhotos(draft.auditId);
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        if (!p || !p.photoId || !p.data) continue;
+        showLoading(true, 'Загрузка черновика...\nФото: ' + (i + 1) + ' из ' + photos.length);
+        const blob = auditBase64ToBlob(p.data, p.mimeType);
+        await v2Put(V2_PHOTO_STORE, p.photoId, {
+          auditId: draft.auditId,
+          photoId: p.photoId,
+          sectionIndex: String(p.sectionIndex || ''),
+          questionId: String(p.questionId || ''),
+          name: p.name || 'photo.jpg',
+          mimeType: p.mimeType || blob.type || 'image/jpeg',
+          blob: blob,
+          createdAt: p.createdAt || new Date().toISOString()
+        });
+      }
+      await applyLocalDraft(draft);
+      try {
+        localStorage.setItem(V2_META_KEY, JSON.stringify({
+          auditId: draft.auditId,
+          folderName: draft.folderName || '',
+          objectName: draft.objectName || '',
+          auditDate: draft.auditDate || '',
+          savedAt: draft.savedAt || new Date().toISOString(),
+          photoCount: photos.length
+        }));
+      } catch (e) {}
+      showLoading(false);
+      alert('Черновик загружен. Теперь его можно проверить, изменить и выгрузить отчёт с этого устройства.');
+    } catch (error) {
+      showLoading(false);
+      alert('Не удалось загрузить черновик:\n\n' + getErrorMessage(error));
+    } finally {
+      if (input) input.value = '';
+    }
+  }
+
+  function bindAuditFileButtons() {
+    const exportButton = document.getElementById('exportAuditFileButton');
+    const importButton = document.getElementById('importAuditFileButton');
+    const input = document.getElementById('importAuditFileInput');
+    if (exportButton && !exportButton.dataset.bound) {
+      exportButton.dataset.bound = 'true';
+      exportButton.addEventListener('click', exportAuditFile);
+    }
+    if (importButton && input && !importButton.dataset.bound) {
+      importButton.dataset.bound = 'true';
+      importButton.addEventListener('click', function(){ input.click(); });
+      input.addEventListener('change', function(){
+        const file = input.files && input.files[0];
+        if (file) importAuditFile(file);
+      });
+    }
+  }
+
   function v2LoadAuditById(auditId) {
     const id = String(auditId || '').trim();
     if (!id) return Promise.resolve({exists:false});
@@ -4976,6 +5156,10 @@ function v2LoadActiveAudit() {
   }
   // V2.6 ниже по файлу ещё раз привязывает кнопку. Поэтому V2.8
   // подключается последним — после DOMContentLoaded.
+  document.addEventListener('DOMContentLoaded', function(){
+    bindAuditFileButtons();
+  });
+
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){
       if(!bindV28Submit()){
