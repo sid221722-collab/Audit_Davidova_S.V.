@@ -1125,6 +1125,34 @@ html, body, input, select, textarea {
   flex-basis: 34px !important;
   font-size: 40px !important;
 }
+<style id="header-collapse-v1">
+/* Сворачивание верхней панели: не меняет существующие id и обработчики. */
+.header-panel-toggle {
+  display:flex !important;
+  width:100% !important;
+  min-height:34px !important;
+  height:34px !important;
+  margin:4px 0 8px !important;
+  padding:3px 10px !important;
+  box-sizing:border-box !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:8px !important;
+  border:1px solid #aeb6bf !important;
+  border-radius:8px !important;
+  background:#f1f3f4 !important;
+  color:#30343b !important;
+  font:700 15px/1 Arial,Helvetica,sans-serif !important;
+  cursor:pointer !important;
+  touch-action:manipulation !important;
+}
+.header-panel-toggle:active { transform:translateY(1px); }
+.header-tools-v2.is-collapsed {
+  display:none !important;
+}
+@media (max-width:720px) {
+  .header-panel-toggle { font-size:14px !important; min-height:32px !important; height:32px !important; margin:3px 0 7px !important; }
+}
 </style>
 
 </head>
@@ -1138,7 +1166,7 @@ html, body, input, select, textarea {
 
   <header class="header">
 
-    <div class="header-tools-v2">
+    <div id="headerToolsPanel" class="header-tools-v2">
       <div id="formTitle" class="header-title">АУДИТ ПО ПИЩЕВОЙ БЕЗОПАСНОСТИ</div>
 
       <div class="draft-buttons draft-buttons-top">
@@ -1170,6 +1198,10 @@ html, body, input, select, textarea {
         <span class="draft-button-text">Начать новый аудит</span>
       </button>
     </div>
+
+    <button id="headerPanelToggle" type="button" class="header-panel-toggle" aria-expanded="true" aria-controls="headerToolsPanel">
+      ▲ Свернуть верхнюю панель
+    </button>
 
     <div class="header-info">
 
@@ -5514,6 +5546,41 @@ function v2LoadActiveAudit() {
       if(bindV25Submit() || tries>=20) clearInterval(timer);
     },250);
   }
+})();
+</script>
+
+
+<script>
+/* ==========================================================
+   V1 — сворачивание верхней панели
+   Состояние хранится локально отдельно на каждом устройстве.
+   ========================================================== */
+(function(){
+  var KEY = 'audit_header_panel_collapsed_v1';
+  function initHeaderPanelToggle(){
+    var panel=document.getElementById('headerToolsPanel');
+    var btn=document.getElementById('headerPanelToggle');
+    if(!panel || !btn) return;
+
+    function apply(collapsed, save){
+      panel.classList.toggle('is-collapsed', !!collapsed);
+      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      btn.textContent = collapsed ? '▼ Развернуть верхнюю панель' : '▲ Свернуть верхнюю панель';
+      if(save){
+        try{ localStorage.setItem(KEY, collapsed ? '1' : '0'); }catch(e){}
+      }
+    }
+
+    var collapsed=false;
+    try{ collapsed=localStorage.getItem(KEY)==='1'; }catch(e){}
+    apply(collapsed,false);
+    btn.addEventListener('click',function(){
+      apply(!panel.classList.contains('is-collapsed'),true);
+    });
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initHeaderPanelToggle);
+  else initHeaderPanelToggle();
 })();
 </script>
 
