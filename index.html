@@ -979,12 +979,72 @@ html, body, input, select, textarea {
   .header-tools-v2 .draft-button { font-size:24px !important; }
 }
 @media (max-width:720px) {
-  /* В PWA viewport остаётся 900px, поэтому основная компоновка сохраняется.
-     При реальном узком viewport всё равно не допускаем вылезания текста. */
   .header-tools-v2 .draft-button { font-size:20px !important; }
   .header-tools-v2 .draft-icon { width:30px !important; font-size:34px !important; }
   .header-tools-v2 .draft-plus { font-size:42px !important; }
 }
+
+/* Финальная настройка шапки для телефона: meta viewport у приложения
+   работает в ширине 900px, поэтому обычный @media 720px здесь не срабатывает.
+   Делаем две ровные строки и оставляем достаточно места тексту кнопок. */
+.header-tools-v2 {
+  grid-template-columns: 290px minmax(0,1fr) !important;
+  grid-template-rows: 88px 64px !important;
+  column-gap:12px !important;
+  row-gap:8px !important;
+}
+.header-tools-v2 > .header-title {
+  font-size:28px !important;
+  line-height:1.05 !important;
+  text-align:center !important;
+}
+.header-tools-v2 .draft-buttons-top {
+  gap:8px !important;
+}
+.header-tools-v2 .draft-button {
+  font-size:19px !important;
+  line-height:1.05 !important;
+  padding:5px 6px !important;
+  gap:5px !important;
+}
+.header-tools-v2 .draft-icon {
+  width:28px !important;
+  height:34px !important;
+  font-size:32px !important;
+}
+.header-tools-v2 .draft-button-text {
+  overflow-wrap:normal !important;
+  word-break:normal !important;
+}
+.header-tools-v2 .storage-choice {
+  padding:3px 0 !important;
+  gap:5px !important;
+}
+.header-tools-v2 .storage-choice-title {
+  font-size:20px !important;
+}
+.header-tools-v2 .storage-choice-options {
+  gap:5px !important;
+}
+.header-tools-v2 .storage-choice-option {
+  min-height:54px !important;
+  height:54px !important;
+  padding:4px 5px !important;
+  font-size:19px !important;
+}
+.header-tools-v2 .storage-choice-option input {
+  width:21px !important;
+  height:21px !important;
+}
+.header-tools-v2 .draft-new-wide {
+  padding-left:12px !important;
+  padding-right:12px !important;
+}
+.header-tools-v2 .draft-new-wide .draft-plus {
+  width:38px !important;
+  font-size:44px !important;
+}
+
 </style>
 
 </head>
